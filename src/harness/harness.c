@@ -283,6 +283,7 @@ int Harness_Init(int* argc, char* argv[]) {
     // this setting runs physics every frame, smoothing movement out.
     // disabled by default for now until we are happy it doesn't cause other issues
     harness_game_config.physics_per_frame = 0;
+    harness_game_config.fix_ped_spasm = 0;
     harness_game_config.camera_judder_fix = 1;
     harness_game_config.stealworthy_all_cars = 0;
     harness_game_config.stealworthy_percentage = 50;
@@ -586,6 +587,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         }
     } else if (MATCH("Slop", "ExtendDrawDistance")) {
         harness_game_config.extend_draw_distance = (value[0] == '1');
+    } else if (MATCH("Slop", "FixPedSpasm")) {
+        harness_game_config.fix_ped_spasm = (value[0] == '1');
     } else if (MATCH("Slop", "Meld")) {
         harness_game_config.meld = (value[0] == '1');
     } else if (MATCH("Slop", "MeldBothStartingCars")) {

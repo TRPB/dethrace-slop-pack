@@ -964,16 +964,23 @@ void MungePedestrianSequence(tPedestrian_data* pPedestrian, int pAction_changed)
                 if (pAction_changed || current_looping > pPedestrian->current_frame) {
                     pPedestrian->current_frame = -1;
                     pPedestrian->done_initial = 0;
+                    pPedestrian->last_frame = 0;
+                    pPedestrian->current_sequence = the_sequence;
                 } else if (pPedestrian->fatal_car_impact_action != pPedestrian->current_action
                     && DR_FF(pPedestrian->fatal_ground_impact_action) != pPedestrian->current_action
                     && pPedestrian->giblets_action != pPedestrian->current_action) {
                     pPedestrian->current_frame = pPedestrian->current_frame + sequence_ptr->looping_frame_start - current_looping - 1;
                     pPedestrian->done_initial = 1;
+                    pPedestrian->last_frame = 0;
+                    pPedestrian->current_sequence = the_sequence;
                 } else if (pPedestrian->current_frame >= sequence_ptr->number_of_frames) {
                     pPedestrian->current_frame = sequence_ptr->number_of_frames - 1;
+                    pPedestrian->last_frame = 0;
+                    pPedestrian->current_sequence = the_sequence;
+                } else {
+                    pPedestrian->last_frame = 0;
+                    pPedestrian->current_sequence = the_sequence;
                 }
-                pPedestrian->last_frame = 0;
-                pPedestrian->current_sequence = the_sequence;
             }
             break;
         }
@@ -1381,7 +1388,19 @@ void MungePedestrianPath(tPedestrian_data* pPedestrian, float pDanger_level, br_
             pPedestrian->instruction_direction = -pPedestrian->instruction_direction;
             gInitial_instruction = NULL;
             if (PedestrianNextInstruction(pPedestrian, pDanger_level, 0, 1) != 0) {
-                ChangeActionTo(pPedestrian, 0, 0);
+#if defined(DETHRACE_FIX_BUGS)
+                // Resetting to action #0 here resets last_action_change, which lets
+                // MungePedestrianAction immediately re-trigger action #1 next frame
+                // (reaction_time == 0), causing a rapid 0<->1 action flicker visible
+                // as the ped alternating between standing and the initial panic pose.
+                // If already in a non-zero action, stay there; the path may succeed
+                // next frame once the ped's direction updates.
+                if (!harness_game_config.fix_ped_spasm || pPedestrian->current_action == 0) {
+#endif
+                    ChangeActionTo(pPedestrian, 0, 0);
+#if defined(DETHRACE_FIX_BUGS)
+                }
+#endif
             }
         }
         if (pPedestrian->last_special_volume != NULL
