@@ -287,9 +287,15 @@ void StretchMark(tSkid* pMark, br_vector3* pFrom, br_vector3* pTo, br_scalar pTe
         BrVector3Scale(&pMark->pos, &temp, 0.5f);
         rows[3] = pMark->pos;
 #if defined(DETHRACE_FIX_BUGS)
-        // Lift model vertices (at y=1.0) 0.001 BU along the surface normal.
-        // The default mat.m[1]=(0,0.01,0) lifts in world Y regardless of slope.
-        BrVector3Scale(&rows[1], &pMark->normal, 0.001f);
+        // Lift model vertices (at y=1.0) 0.005 BU along the surface normal so
+        // skid marks render on top of car shadows. The shadow is rendered in a
+        // separate BrZbScene pass before the main scene and leaves exact ground
+        // depth values in the depth buffer. At typical follow-cam distances
+        // (15-30 BU) a 0.001 BU offset produces only 1-3 depth-buffer units of
+        // separation, which collapses to zero under GPU rounding; 0.005 gives
+        // ~6-15 units, reliably beating the shadow. The offset is along the
+        // surface normal (not world Y) so it stays flush on sloped surfaces.
+        BrVector3Scale(&rows[1], &pMark->normal, 0.005f);
 #endif
         model = pMark->actor->model;
         model->vertices[1].map.v[0] = pTexture_start / 0.05f;

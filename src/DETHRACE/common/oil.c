@@ -233,7 +233,7 @@ void EnsureGroundDetailVisible(br_vector3* pNew_pos, br_vector3* pGround_normal,
     // typical follow-cam ranges this floats marks above the wheel mesh and they
     // render through wheels. Setting translation to the stored ground position
     // avoids distance-dependent float; the per-geometry lift for skid marks is
-    // handled in StretchMark (mat.m[1] = normal * 0.001).
+    // handled in StretchMark (mat.m[1] = normal * 0.005).
     pNew_pos->v[0] = pOld_pos->v[0];
     pNew_pos->v[1] = pOld_pos->v[1];
     pNew_pos->v[2] = pOld_pos->v[2];
