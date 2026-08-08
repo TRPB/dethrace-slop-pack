@@ -141,6 +141,8 @@ target_sources(dethrace_obj PRIVATE
     common/options.h
     common/pedestrn.c
     common/pedestrn.h
+    common/player_opponent.c
+    common/player_opponent.h
     common/pratcam.c
     common/pratcam.h
     common/racestrt.c

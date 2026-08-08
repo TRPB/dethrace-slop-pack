@@ -30,6 +30,8 @@ extern tU32 gLast_panel_frame_time[2];
 extern tU8* gPanel_flic_data[2];
 extern int gPanel_flic_top[2];
 extern tFlic_descriptor gPanel_flic[2];
+extern int gPanel_scale[2];
+extern br_pixelmap* gPanel_extra[2];
 extern int gPanel_flic_left[2];
 extern int gPending_pending_flic;
 extern int gSound_ID;

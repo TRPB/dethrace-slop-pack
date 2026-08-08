@@ -1,4 +1,5 @@
 #include "flicplay.h"
+#include "player_opponent.h"
 #include "brender.h"
 #include "displays.h"
 #include "drmem.h"
@@ -580,6 +581,13 @@ tU8* gPanel_flic_data[2];
 
 // GLOBAL: CARM95 0x0053d0c0
 int gPanel_flic_top[2];
+
+// Added by dethrace: per-panel upscale flag and optional static nameplate image.
+// When gPanel_scale[j] is set the FLI frame is nearest-neighbour upscaled to
+// fill the panel width (aspect preserved, top-aligned). gPanel_extra[j] is
+// blitted into the space below the scaled animation if present.
+int gPanel_scale[2];
+br_pixelmap* gPanel_extra[2];
 
 // GLOBAL: CARM95 0x0053d0d8
 tFlic_descriptor gPanel_flic[2];
@@ -1973,6 +1981,13 @@ void DisposeFlicPanel(int pIndex) {
     BrMemFree(gPanel_buffer[pIndex]->pixels);
     BrPixelmapFree(gPanel_buffer[pIndex]);
     gPanel_buffer[pIndex] = NULL;
+#if defined(DETHRACE_FIX_BUGS)
+    if (gPanel_extra[pIndex] != NULL) {
+        BrPixelmapFree(gPanel_extra[pIndex]);
+        gPanel_extra[pIndex] = NULL;
+    }
+    PlayerOpponent_ResetPanel(pIndex);
+#endif
 }
 
 // IDA: void __usercall ServicePanelFlics(int pCopy_to_buffer@<EAX>)
@@ -2017,8 +2032,65 @@ void ServicePanelFlics(int pCopy_to_buffer) {
                         0);
                 }
                 gLast_panel_frame_time[j] = the_time;
+#if defined(DETHRACE_FIX_BUGS)
+                PlayerOpponent_ServiceNameplate(j);
+#endif
             }
             if (pCopy_to_buffer) {
+#ifdef DETHRACE_FIX_BUGS
+                if (gPanel_scale[j] && gPanel_flic[j].width > 0 && gPanel_flic[j].height > 0) {
+                    // Scale directly to gBack_screen; leave panel buffer untouched so FLI
+                    // delta-frame state is preserved between frames.
+                    int flic_w = gPanel_flic[j].width;
+                    int flic_h = gPanel_flic[j].height;
+                    int panel_w = gPanel_buffer[j]->width;
+                    int panel_h = gPanel_buffer[j]->height;
+                    int src_stride = gPanel_buffer[j]->row_bytes;
+                    tU8* src = (tU8*)gPanel_buffer[j]->pixels;
+                    int dst_stride = gBack_screen->row_bytes;
+                    tU8* dst_origin = (tU8*)gBack_screen->pixels
+                        + gPanel_flic_top[j] * dst_stride + gPanel_flic_left[j];
+                    int scaled_w, scaled_h, dy, dx, sy, sx;
+                    scaled_w = panel_w;
+                    scaled_h = flic_h * panel_w / flic_w;
+                    if (scaled_h > panel_h) {
+                        scaled_h = panel_h;
+                        scaled_w = flic_w * panel_h / flic_h;
+                    }
+                    for (dy = 0; dy < scaled_h; dy++) {
+                        tU8* dst = dst_origin + dy * dst_stride;
+                        tU8* src_row = src + (dy * flic_h / scaled_h) * src_stride;
+                        for (dx = 0; dx < scaled_w; dx++) {
+                            sx = dx * flic_w / scaled_w;
+                            dst[dx] = src_row[sx];
+                        }
+                    }
+                    if (scaled_h < panel_h) {
+                        int extra_y = scaled_h;
+                        int extra_h = panel_h - scaled_h;
+                        br_pixelmap* np = PlayerOpponent_GetNameplatePixelmap(j);
+                        br_pixelmap* extra_src = (np != NULL) ? np : gPanel_extra[j];
+                        if (extra_src != NULL) {
+                            int src_w2 = extra_src->width;
+                            int src_h2 = extra_src->height;
+                            int src_stride2 = extra_src->row_bytes;
+                            tU8* src2 = (tU8*)extra_src->pixels;
+                            for (dy = 0; dy < extra_h; dy++) {
+                                tU8* dst = dst_origin + (extra_y + dy) * dst_stride;
+                                tU8* src_row = src2 + (dy * src_h2 / extra_h) * src_stride2;
+                                for (dx = 0; dx < panel_w; dx++) {
+                                    sx = dx * src_w2 / panel_w;
+                                    dst[dx] = src_row[sx];
+                                }
+                            }
+                        } else {
+                            for (dy = 0; dy < extra_h; dy++) {
+                                memset(dst_origin + (extra_y + dy) * dst_stride, 0, panel_w);
+                            }
+                        }
+                    }
+                } else {
+#endif
                 BrPixelmapRectangleCopy(
                     gBack_screen,
                     gPanel_flic_left[j],
@@ -2028,6 +2100,9 @@ void ServicePanelFlics(int pCopy_to_buffer) {
                     0,
                     gPanel_buffer[j]->width,
                     gPanel_buffer[j]->height);
+#ifdef DETHRACE_FIX_BUGS
+                }
+#endif
             }
         }
     }
@@ -2040,6 +2115,9 @@ void ServicePanelFlics(int pCopy_to_buffer) {
 void ChangePanelFlic(int pIndex, tU8* pData, tU32 pData_length) {
 
     EndFlic(&gPanel_flic[pIndex]);
+#if defined(DETHRACE_FIX_BUGS)
+    PlayerOpponent_ResetPanel(pIndex);
+#endif
     gPanel_flic_data_length[pIndex] = pData_length;
     gPanel_flic_data[pIndex] = pData;
     BrPixelmapFill(gPanel_buffer[pIndex], 0);

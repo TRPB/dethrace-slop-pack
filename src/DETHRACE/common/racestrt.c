@@ -1,4 +1,5 @@
 #include "racestrt.h"
+#include "player_opponent.h"
 #include "brender.h"
 #include "cutscene.h"
 #include "displays.h"
@@ -1304,9 +1305,15 @@ tSO_result DoAutoPartsShop(void) {
 // IDA: void __cdecl SetOpponentFlic()
 // FUNCTION: CARM95 0x004510ba
 void SetOpponentFlic(void) {
+#if defined(DETHRACE_FIX_BUGS)
+    if (PlayerOpponent_SetOpponentFlic()) {
+        return;
+    }
+#endif
+    int idx = gCurrent_race.opponent_list[gOpponent_index].index;
     ChangePanelFlic(0,
-        gOpponents[gCurrent_race.opponent_list[gOpponent_index].index].mug_shot_image_data,
-        gOpponents[gCurrent_race.opponent_list[gOpponent_index].index].mug_shot_image_data_length);
+        gOpponents[idx].mug_shot_image_data,
+        gOpponents[idx].mug_shot_image_data_length);
 }
 
 // IDA: void __cdecl DrawSceneyMappyInfoVieweyThing()

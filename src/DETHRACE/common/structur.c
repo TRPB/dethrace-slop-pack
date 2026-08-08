@@ -372,13 +372,20 @@ int ChooseOpponent(int pNastiness, int* pHad_scum) {
     // The player's own racer can appear as several livery variants when
     // melding; exclude every variant so the player never races themselves.
     int player_cid = Meld_OpponentCharacterId(gProgram_state.current_car.index);
+    // car_number used by the unchosen player character (Max=100, Anna=101).
+    // Variants of that character are eligible regardless of nastiness band.
+    int other_player_car_number = gProgram_state.frank_or_anniness == eFrankie ? 101 : 100;
 #else
     int temp_array[40];
 #endif
 
     count = 0;
     for (i = 0; i < gNumber_of_racers; ++i) {
-        if (gOpponents[i].strength_rating == pNastiness
+        if ((gOpponents[i].strength_rating == pNastiness
+#ifdef DETHRACE_FIX_BUGS
+             || (harness_game_config.add_other_player_as_opponent && gOpponents[i].car_number == other_player_car_number)
+#endif
+            )
             && gProgram_state.current_car.index != i
 #ifdef DETHRACE_FIX_BUGS
             && !(player_cid >= 0 && Meld_OpponentCharacterId(i) == player_cid)
@@ -433,6 +440,16 @@ int ChooseOpponent(int pNastiness, int* pHad_scum) {
             int k;
             for (k = 0; k < gNumber_of_racers; k++) {
                 if (k != i && Meld_OpponentCharacterId(k) == cid) {
+                    gOpponents[k].picked = 1;
+                }
+            }
+        }
+        // Without meld, CIDs are -1, so collapse other-player livery variants
+        // by car_number to prevent the same character appearing twice.
+        if (harness_game_config.add_other_player_as_opponent && gOpponents[i].car_number == other_player_car_number) {
+            int k;
+            for (k = 0; k < gNumber_of_racers; k++) {
+                if (k != i && gOpponents[k].car_number == other_player_car_number) {
                     gOpponents[k].picked = 1;
                 }
             }

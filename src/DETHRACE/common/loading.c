@@ -2951,6 +2951,15 @@ void LoadOpponents(void) {
         GetALineAndDontArgue(f, s);
         str = strtok(s, "\t ,/");
         strcpy(gOpponents[i].mug_shot_name, str);
+#ifdef DETHRACE_FIX_BUGS
+        if (harness_game_config.add_other_player_as_opponent) {
+            if (gOpponents[i].car_number == 100) {
+                strcpy(gOpponents[i].mug_shot_name, "FRANK.FLI");
+            } else if (gOpponents[i].car_number == 101) {
+                strcpy(gOpponents[i].mug_shot_name, "ANNIE.FLI");
+            }
+        }
+#endif
 
         gOpponents[i].mug_shot_image_data = NULL;
         gOpponents[i].grid_icon_image = NULL;

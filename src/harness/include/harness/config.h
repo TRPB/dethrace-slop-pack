@@ -93,6 +93,8 @@ typedef struct tHarness_game_config {
     // Meld_Init() prepends this as game_dirs[0] so DATA/ beside the exe
     // acts as a highest-priority mod dir for both assets and campaign files.
     char meld_overlay_dir[MAX_PATH];
+
+    int add_other_player_as_opponent;
 } tHarness_game_config;
 
 extern tHarness_game_info harness_game_info;
