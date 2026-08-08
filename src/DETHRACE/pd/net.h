@@ -37,6 +37,8 @@ int PDNetHostGame(tNet_game_details* pDetails, char* pHost_name, void** pHost_ad
 
 int PDNetJoinGame(tNet_game_details* pDetails, char* pPlayer_name);
 
+int PDNetPreJoinForCarSelection(tNet_game_details* pDetails);
+
 void PDNetLeaveGame(tNet_game_details* pDetails);
 
 void PDNetHostFinishGame(tNet_game_details* pDetails);
@@ -66,5 +68,9 @@ int PDNetSendMessageToAddress(tNet_game_details* pDetails, tNet_message* pMessag
 int PDNetInitClient(tNet_game_details* pDetails);
 
 int PDNetGetHeaderSize(void);
+
+// Called by ReenableNetService() after a DisableNetService period.
+// Sends a relay HEARTBEAT so the server's last_seen is refreshed.
+void PDNetReenableNetService(void);
 
 #endif

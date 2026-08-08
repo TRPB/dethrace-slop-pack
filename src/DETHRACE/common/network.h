@@ -101,6 +101,8 @@ int NetInitClient(tNet_game_details* pDetails);
 
 int NetJoinGameLowLevel(tNet_game_details* pDetails, char* pPlayer_name);
 
+int NetPreJoinForCarSelection(tNet_game_details* pDetails);
+
 int NetJoinGame(tNet_game_details* pDetails, char* pPlayer_name, int pCar_index);
 
 void NetObtainSystemUserName(char* pName, int pMax_length);

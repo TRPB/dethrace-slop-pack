@@ -1387,7 +1387,7 @@ void ApplyPhysicsToCars(tU32 last_frame_time, tU32 pTime_difference) {
     if (gLast_mechanics_time < last_frame_time) {
         gLast_mechanics_time = PHYSICS_STEP_TIME * (last_frame_time / PHYSICS_STEP_TIME);
 #ifdef DETHRACE_FIX_BUGS
-        if (harness_game_config.physics_per_frame && pTime_difference < PHYSICS_STEP_TIME) {
+        if (harness_game_config.physics_per_frame) {
             gLast_mechanics_time = last_frame_time;
         }
 #endif
@@ -1407,8 +1407,10 @@ void ApplyPhysicsToCars(tU32 last_frame_time, tU32 pTime_difference) {
     gDt = PHYSICS_STEP_TIME / 1000.0f;
 
 #ifdef DETHRACE_FIX_BUGS
-    if (harness_game_config.physics_per_frame && pTime_difference < PHYSICS_STEP_TIME) {
-        time_step = pTime_difference > 0 ? pTime_difference : 1;
+    if (harness_game_config.physics_per_frame) {
+        // Cap at PHYSICS_STEP_TIME to prevent a huge first step after loading/countdown.
+        tU32 capped = pTime_difference < PHYSICS_STEP_TIME ? pTime_difference : PHYSICS_STEP_TIME;
+        time_step = capped > 0 ? capped : 1;
         gDt = time_step / 1000.0f;
     }
 #endif

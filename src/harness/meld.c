@@ -1626,6 +1626,13 @@ FILE* Meld_fopen(const char* path, const char* mode) {
         if (strcasecmp(base, "RACES.TXT") == 0 && s_races_buf != NULL) {
             return Meld_OpenRaceFile();
         }
+        // When net races are merged into the main buffer, serve NETRACES.TXT and
+        // PEDRACES.TXT from the same merged buffer so the net lobby gets the full
+        // race list without trying to open the encrypted on-disk file directly.
+        if ((strcasecmp(base, "NETRACES.TXT") == 0 || strcasecmp(base, "PEDRACES.TXT") == 0)
+                && gMeld_net_races_active && s_races_buf != NULL) {
+            return Meld_OpenRaceFile();
+        }
         if (strcasecmp(base, "OPPONENT.TXT") == 0 && s_oppo_buf != NULL) {
             return Meld_OpenOpponentFile();
         }

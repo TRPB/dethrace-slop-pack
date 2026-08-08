@@ -211,8 +211,23 @@ void DisableNetService(void) {
 // IDA: void __cdecl ReenableNetService()
 // FUNCTION: CARM95 0x0044660d
 void ReenableNetService(void) {
+    int i;
 
     gNet_service_disable = 0;
+#if defined(DETHRACE_FIX_BUGS)
+    // The main loop was blocked during DisableNetService (e.g. LoadCar).  Any
+    // last_heard_from_him timestamps are now stale, so CheckForDisappearees would
+    // immediately fire a false disconnect.  Reset them to give remote players a fresh
+    // 20-second window now that we can receive again.
+    for (i = 0; i < COUNT_OF(gNet_players); i++) {
+        if (gNet_players[i].last_heard_from_him != 0) {
+            gNet_players[i].last_heard_from_him = PDGetTotalTime();
+        }
+    }
+    // Refresh the relay server's last_seen so the session does not expire during
+    // prolonged loading phases where both players are silent simultaneously.
+    PDNetReenableNetService();
+#endif
 }
 
 // IDA: int __cdecl PermitNetServiceReentrancy()
@@ -735,6 +750,10 @@ int NetInitClient(tNet_game_details* pDetails) {
 int NetJoinGameLowLevel(tNet_game_details* pDetails, char* pPlayer_name) {
 
     return PDNetJoinGame(pDetails, pPlayer_name);
+}
+
+int NetPreJoinForCarSelection(tNet_game_details* pDetails) {
+    return PDNetPreJoinForCarSelection(pDetails);
 }
 
 DR_STATIC_ASSERT(offsetof(tNet_message_join, player_info) == 4);
@@ -1302,6 +1321,13 @@ void ReceivedJoin(tNet_contents* pContents, void* pSender_address) {
 
             if (pContents->data.join.player_info.car_index < 0) {
                 pContents->data.join.player_info.car_index = PickARandomCar();
+                if (pContents->data.join.player_info.car_index < 0) {
+                    message = NetBuildMessage(NETMSGID_NEWPLAYERLIST, 0);
+                    message->contents.data.player_list.number_of_players = 0;
+                    NetSendMessageToAddress(gCurrent_net_game, message, pSender_address);
+                    BrMemFree(new_players);
+                    return;
+                }
             } else {
                 for (i = 0; i < gNumber_of_net_players; i++) {
                     if (gNet_players[i].car_index == pContents->data.join.player_info.car_index) {
@@ -1492,6 +1518,15 @@ void ReceivedNewPlayerList(tNet_contents* pContents, tNet_message* pM) {
         gReceiving_new_players = 0;
         ReceivedNewPlayerList(pContents, pM);
     } else {
+#if defined(DETHRACE_FIX_BUGS)
+        // Guard against a crafted network packet causing an out-of-bounds write.
+        if (pContents->data.player_list.this_index < 0 || pContents->data.player_list.this_index >= (int)COUNT_OF(gNew_net_players)) {
+            return;
+        }
+        if (pContents->data.player_list.number_of_players > (int)COUNT_OF(gNew_net_players)) {
+            return;
+        }
+#endif
         memcpy(&gNew_net_players[pContents->data.player_list.this_index], &pContents->data.player_list.player, sizeof(tNet_game_player_info));
         for (i = 0; i < pContents->data.player_list.number_of_players; i++) {
             if (gNew_net_players[i].car_index < 0) {

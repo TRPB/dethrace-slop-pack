@@ -2,6 +2,7 @@
 
 #include "brender.h"
 #include "dr_types.h"
+#include "relay.h"
 #include "errors.h"
 #include "globvrpb.h"
 #include "harness/config.h"
@@ -345,12 +346,14 @@ int PDNetInitialise(void) {
     if (strstr(gLocal_addr_string, "00a0240f9fac")) {
         gMatts_PC = 1;
     }
+    Relay_Init();
     return 0;
 }
 
 // IDA: int __cdecl PDNetShutdown()
 int PDNetShutdown(void) {
     dr_dprintf("PDNetShutdown()");
+    Relay_Shutdown();
     if (gSocket != -1) {
         OS_CloseSocket(gSocket);
     }
@@ -366,6 +369,9 @@ void PDNetStartProducingJoinList(void) {
     if (gJoinable_games == NULL) {
         PDFatalError("Can't allocate memory for joinable games");
     }
+    if (Relay_IsEnabled()) {
+        Relay_StartProducingJoinList(gJoinable_games, &gNumber_of_hosts);
+    }
 }
 
 // IDA: void __cdecl PDNetEndJoinList()
@@ -379,6 +385,9 @@ void PDNetEndJoinList(void) {
 
 // IDA: int __usercall PDNetGetNextJoinGame@<EAX>(tNet_game_details *pGame@<EAX>, int pIndex@<EDX>)
 int PDNetGetNextJoinGame(tNet_game_details* pGame, int pIndex) {
+    if (Relay_IsEnabled()) {
+        return Relay_GetNextJoinGame(pGame, pIndex);
+    }
     static tU32 next_broadcast_time = 0;
     int i;
     int j;
@@ -427,6 +436,9 @@ void PDNetDisposeGameDetails(tNet_game_details* pDetails) {
 // IDA: int __usercall PDNetHostGame@<EAX>(tNet_game_details *pDetails@<EAX>, char *pHost_name@<EDX>, void **pHost_address@<EBX>)
 int PDNetHostGame(tNet_game_details* pDetails, char* pHost_name, void** pHost_address) {
     dr_dprintf("PDNetHostGame()");
+    if (Relay_IsEnabled()) {
+        return Relay_HostGame(pDetails, pHost_name, pHost_address);
+    }
     //*pHost_address = &gLocal_addr;
     *pHost_address = &gLocal_addr_copyable;
     return 1;
@@ -435,17 +447,31 @@ int PDNetHostGame(tNet_game_details* pDetails, char* pHost_name, void** pHost_ad
 // IDA: int __usercall PDNetJoinGame@<EAX>(tNet_game_details *pDetails@<EAX>, char *pPlayer_name@<EDX>)
 int PDNetJoinGame(tNet_game_details* pDetails, char* pPlayer_name) {
     dr_dprintf("PDNetJoinGame()");
+    if (Relay_IsEnabled()) {
+        return Relay_JoinGame(pDetails, pPlayer_name);
+    }
     return 0;
+}
+
+int PDNetPreJoinForCarSelection(tNet_game_details* pDetails) {
+    return Relay_PreJoinForCarSelection(pDetails);
 }
 
 // IDA: void __usercall PDNetLeaveGame(tNet_game_details *pDetails@<EAX>)
 void PDNetLeaveGame(tNet_game_details* pDetails) {
     dr_dprintf("PDNetLeaveGame()");
+    Relay_LeaveGame();
 }
 
 // IDA: void __usercall PDNetHostFinishGame(tNet_game_details *pDetails@<EAX>)
 void PDNetHostFinishGame(tNet_game_details* pDetails) {
     dr_dprintf("PDNetHostFinishGame()");
+}
+
+void PDNetReenableNetService(void) {
+    if (Relay_IsEnabled()) {
+        Relay_SendHeartbeat();
+    }
 }
 
 // IDA: tU32 __usercall PDNetExtractGameID@<EAX>(tNet_game_details *pDetails@<EAX>)
@@ -491,6 +517,9 @@ int PDNetSendMessageToPlayer(tNet_game_details* pDetails, tNet_message* pMessage
 
 // IDA: int __usercall PDNetSendMessageToAllPlayers@<EAX>(tNet_game_details *pDetails@<EAX>, tNet_message *pMessage@<EDX>)
 int PDNetSendMessageToAllPlayers(tNet_game_details* pDetails, tNet_message* pMessage) {
+    if (Relay_IsEnabled()) {
+        return Relay_SendMessageToAllPlayers(pDetails, pMessage);
+    }
     char str[256];
     int i;
 
@@ -516,6 +545,9 @@ int PDNetSendMessageToAllPlayers(tNet_game_details* pDetails, tNet_message* pMes
 
 // IDA: tNet_message* __usercall PDNetGetNextMessage@<EAX>(tNet_game_details *pDetails@<EAX>, void **pSender_address@<EDX>)
 tNet_message* PDNetGetNextMessage(tNet_game_details* pDetails, void** pSender_address) {
+    if (Relay_IsEnabled()) {
+        return Relay_GetNextMessage(pDetails, pSender_address);
+    }
     char* receive_buffer;
     char str[256];
     int msg_type;
@@ -593,6 +625,9 @@ void PDNetDisposePlayer(tNet_game_player_info* pPlayer) {
 
 // IDA: int __usercall PDNetSendMessageToAddress@<EAX>(tNet_game_details *pDetails@<EAX>, tNet_message *pMessage@<EDX>, void *pAddress@<EBX>)
 int PDNetSendMessageToAddress(tNet_game_details* pDetails, tNet_message* pMessage, void* pAddress) {
+    if (Relay_IsEnabled()) {
+        return Relay_SendMessageToAddress(pDetails, pMessage, pAddress);
+    }
     char str[256];
     struct sockaddr_in someaddr;
 

@@ -1675,6 +1675,9 @@ int PickARandomCar(void) {
             }
         }
     }
+    if (array_size == 0) {
+        return -1;
+    }
     return cars[IRandomBetween(0, array_size - 1)];
 }
 
@@ -1736,6 +1739,11 @@ int ChooseNetCar(tNet_game_details* pNet_game, tNet_game_options* pOptions, int*
     }
     gNet_options = pOptions;
     if (!pIm_the_host_so_fuck_off) {
+#ifdef DETHRACE_FIX_BUGS
+        if (gCar_details == NULL && gNumber_of_racers > 0) {
+            gCar_details = BrMemCalloc(gNumber_of_racers, sizeof(tCar_detail_info), kMem_net_car_spec);
+        }
+#endif
         RequestCarDetails(pNet_game);
         start_time = PDGetTotalTime();
         while (!gReceived_car_details && PDGetTotalTime() - start_time < 10000) {
@@ -1840,6 +1848,12 @@ int DoMultiPlayerStart(void) {
             return 0;
         }
         car_index = -1;
+#ifdef DETHRACE_FIX_BUGS
+        if (NetPreJoinForCarSelection(game_to_join) != 0) {
+            NetDisposeGameDetails(game_to_join);
+            return 0;
+        }
+#endif
         // Abusing 'start_rank' here, it's probably better to introduce a new variable name (e.g. join_result)
         start_rank = -4;
         while (start_rank == -4) {
@@ -1852,6 +1866,11 @@ int DoMultiPlayerStart(void) {
             start_rank = NetJoinGame(game_to_join, gProgram_state.player_name[0], car_index);
             if (start_rank == 0) {
                 LoadRaces(gRace_list, &gNumber_of_races, gCurrent_net_game->type);
+#ifdef DETHRACE_FIX_BUGS
+                if (gCar_details == NULL) {
+                    gCar_details = BrMemCalloc(gNumber_of_racers, sizeof(tCar_detail_info), kMem_net_car_spec);
+                }
+#endif
                 SetUpOtherNetThings(game_to_join);
                 ReenableNetService();
                 strcpy(s, gProgram_state.player_name[0]);

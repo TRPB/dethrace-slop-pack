@@ -180,7 +180,7 @@ if(MSVC_42_FOR_RECCMP)
     target_sources(dethrace_obj PRIVATE pc-win95/win95net.c)
 else()
     # dethrace-added cross platform sys and network implementation
-    target_sources(dethrace_obj PRIVATE pc-all/allnet.c)
+    target_sources(dethrace_obj PRIVATE pc-all/allnet.c pc-all/relay.c)
 endif()
 
 # Create our main game binary.

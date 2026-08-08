@@ -595,6 +595,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.meld_both_starting_cars = (value[0] == '1');
     } else if (MATCH("Slop", "MeldNetRaces")) {
         harness_game_config.meld_net_races = (value[0] == '1');
+    } else if (MATCH("Slop", "RelayServer")) {
+        safe_strcpy(harness_game_config.relay_server, value);
     }
 
     else if (MATCH("Developers", "Diagnostics")) {
