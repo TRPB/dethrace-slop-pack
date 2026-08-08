@@ -1287,6 +1287,12 @@ void RecordSmokeCircle(br_vector3* pCent, br_scalar pR, br_scalar pStrength, br_
     tU8 shade_index;
     br_colour shade_rgb;
 
+#ifdef DETHRACE_FIX_BUGS
+    if (gN_BR_smoke_structs >= (int)COUNT_OF(gBR_smoke_structs)) {
+        return;
+    }
+#endif
+
     if (gRendering_mirror) {
         DRMatrix34TApplyP(&gBR_smoke_structs[gN_BR_smoke_structs].pos, pCent, &gRearview_camera_to_world);
     } else {
