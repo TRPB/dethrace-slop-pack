@@ -21,6 +21,7 @@
 #include "utility.h"
 #include <stdlib.h>
 
+
 // GLOBAL: CARM95 0x00536264
 char* gPalette_copy__mainmenu; // suffix added to avoid duplicate symbol
 

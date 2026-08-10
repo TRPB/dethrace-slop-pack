@@ -1,5 +1,7 @@
 #include "pedestrn.h"
+#include "achievements.h"
 #include "brender.h"
+#include "stats.h"
 #include "car.h"
 #include "constants.h"
 #include "displays.h"
@@ -731,6 +733,11 @@ void KillPedestrian(tPedestrian_data* pPedestrian) {
     if (pPedestrian->hit_points != -100) {
         if (pPedestrian->ref_number < 100) {
             gProgram_state.peds_killed++;
+#if defined(DETHRACE_FIX_BUGS)
+            Stats_OnPedKilled();
+            Achievement_OnPedKilled(pPedestrian->colour_map != NULL && pPedestrian->colour_map->identifier != NULL
+                && (strncasecmp(pPedestrian->colour_map->identifier, "SKN", 3) == 0 || strncasecmp(pPedestrian->colour_map->identifier, "COW", 3) == 0));
+#endif
         }
         pPedestrian->hit_points = -100;
         if (IsActionReplayAvailable()) {
@@ -952,6 +959,17 @@ void MungePedestrianSequence(tPedestrian_data* pPedestrian, int pAction_changed)
             ped_movement_angle += 360.f;
         }
         heading_difference = ped_movement_angle - pPedestrian->car_to_ped;
+#if defined(DETHRACE_FIX_BUGS)
+        // When ped_movement_angle ≈ car_to_ped (ped running nearly directly away
+        // from camera), tiny per-frame changes in car_to_ped make the comparison
+        // above alternate, flipping heading_difference between ~0° and ~360°.
+        // Those two values select different bearing sequences (first vs last), which
+        // use different sprite frames or flipped flags, causing left/right flicker.
+        // Clamp to 0° — 359°+ is angularly the same bearing as ~0° (running away).
+        if (harness_game_config.fix_ped_spasm && heading_difference > 359.f) {
+            heading_difference = 0.f;
+        }
+#endif
     } else {
         heading_difference = gCamera_to_horiz_angle;
     }
@@ -959,6 +977,19 @@ void MungePedestrianSequence(tPedestrian_data* pPedestrian, int pAction_changed)
         if (heading_difference <= the_action->sequences[i].max_bearing) {
             the_sequence = the_action->sequences[i].sequence_index;
             if (pPedestrian->current_sequence != the_sequence) {
+#if defined(DETHRACE_FIX_BUGS)
+                // Bearing zone boundaries cause oscillation when heading_difference
+                // sits right on a boundary — camera noise flips it either side every
+                // frame, cycling through two sequences with different flipped flags.
+                // Add a 1° dead zone at each zone's lower edge: only commit to the
+                // new sequence if we're clearly inside it, not just barely entered.
+                if (harness_game_config.fix_ped_spasm) {
+                    float lower_bound = (i > 0) ? the_action->sequences[i - 1].max_bearing : 0.f;
+                    if (heading_difference - lower_bound < 1.f) {
+                        break;
+                    }
+                }
+#endif
                 sequence_ptr = &pPedestrian->sequences[the_sequence];
                 current_looping = pPedestrian->sequences[pPedestrian->current_sequence].looping_frame_start;
                 if (pAction_changed || current_looping > pPedestrian->current_frame) {
@@ -1402,6 +1433,16 @@ void MungePedestrianPath(tPedestrian_data* pPedestrian, float pDanger_level, br_
                 }
 #endif
             }
+#if defined(DETHRACE_FIX_BUGS)
+            // After flipping, the new waypoint direction may still face the danger source —
+            // both path segments lead toward the car. Re-flip would fire next frame too,
+            // causing visible forward/back flicker across sequential frames with slow cars.
+            // Lock irreversable so the ped commits to this direction until the next waypoint
+            // (PedestrianNextInstruction clears irreversable naturally on arrival).
+            else if (harness_game_config.fix_ped_spasm && BrVector3Dot(&pPedestrian->direction, pDanger_direction) > 0.f) {
+                pPedestrian->irreversable = 1;
+            }
+#endif
         }
         if (pPedestrian->last_special_volume != NULL
             && pPedestrian->last_special_volume->viscosity_multiplier != 1.f) {
@@ -1415,6 +1456,18 @@ void MungePedestrianPath(tPedestrian_data* pPedestrian, float pDanger_level, br_
         if (BrVector3Dot(&pPedestrian->direction, &over_shoot) > 0.f) {
             gInitial_instruction = NULL;
             PedestrianNextInstruction(pPedestrian, pDanger_level, 0, 1);
+#if defined(DETHRACE_FIX_BUGS)
+            // On waypoint arrival, PedestrianNextInstruction clears irreversable and
+            // sets a new direction. If that direction faces the danger source, the
+            // danger-flip fires next frame — then the ped reaches the opposite waypoint
+            // and gets another toward-car instruction, looping 180° every cycle.
+            // Apply the same irreversable lock here that the danger-flip branch uses.
+            if (harness_game_config.fix_ped_spasm
+                    && pDanger_level != 0.f
+                    && BrVector3Dot(&pPedestrian->direction, pDanger_direction) > 0.f) {
+                pPedestrian->irreversable = 1;
+            }
+#endif
         }
     }
 
@@ -1510,6 +1563,9 @@ void MungePedestrianPath(tPedestrian_data* pPedestrian, float pDanger_level, br_
                                     && pPedestrian->current_action != pPedestrian->fatal_ground_impact_action
                                     && pPedestrian->current_action != pPedestrian->giblets_action) {
                                     gProgram_state.peds_killed++;
+#if defined(DETHRACE_FIX_BUGS)
+                                    Stats_OnPedKilled();
+#endif
                                     ChangeActionTo(pPedestrian, pPedestrian->fatal_ground_impact_action, 1);
                                 }
                                 pPedestrian->spin_period = 0.f;
@@ -1547,7 +1603,24 @@ float CalcPedestrianDangerLevel(tPedestrian_data* pPedestrian, br_vector3* pDang
     for (i = 0; i < gNum_active_cars; i++) {
         car = gActive_car_list[i];
         if (car->driver == eDriver_local_human) {
-            pPedestrian->car_to_ped = FastScalarArcTan2(ped_pos->v[X] - gCamera_to_world.m[3][X], ped_pos->v[Z] - gCamera_to_world.m[3][Z]);
+#if defined(DETHRACE_FIX_BUGS)
+            if (harness_game_config.fix_ped_spasm) {
+                // translate.t (= ped_pos) includes the previous frame's sprite X offset,
+                // baked in by MungePedModel. When the bearing sequence changes, the sprite
+                // X offset changes, shifting ped_pos.X and therefore car_to_ped enough to
+                // select the adjacent zone — which then changes the sequence and offset
+                // again, sustaining a flicker feedback loop with a still ped and still car.
+                // Subtract pPedestrian->offset.v[X] (always equal to the sprite X offset
+                // stored in translate.t) to recover the true world X position.
+                pPedestrian->car_to_ped = FastScalarArcTan2(
+                    ped_pos->v[X] - pPedestrian->offset.v[X] - gCamera_to_world.m[3][X],
+                    ped_pos->v[Z] - gCamera_to_world.m[3][Z]);
+            } else {
+#endif
+                pPedestrian->car_to_ped = FastScalarArcTan2(ped_pos->v[X] - gCamera_to_world.m[3][X], ped_pos->v[Z] - gCamera_to_world.m[3][Z]);
+#if defined(DETHRACE_FIX_BUGS)
+            }
+#endif
         }
         if (gBlind_pedestrians) {
             return car->keys.horn ? 100 : 0;
@@ -1994,6 +2067,27 @@ void CheckPedestrianDeathScenario(tPedestrian_data* pPedestrian) {
                         pPedestrian->jump_magnitude /= gGravity_multiplier;
                         if (pPedestrian->ref_number < 100 && (gNet_mode == eNet_mode_none || pPedestrian->murderer == -1)) {
                             gProgram_state.peds_killed++;
+#if defined(DETHRACE_FIX_BUGS)
+                            Stats_OnPedKilled();
+                            {
+                                int is_cow = (pPedestrian->colour_map != NULL
+                                    && pPedestrian->colour_map->identifier != NULL
+                                    && strncasecmp(pPedestrian->colour_map->identifier, "MOO", 3) == 0);
+                                int is_footballer = (pPedestrian->colour_map != NULL
+                                    && pPedestrian->colour_map->identifier != NULL
+                                    && (strncasecmp(pPedestrian->colour_map->identifier, "SKN", 3) == 0
+                                        || strncasecmp(pPedestrian->colour_map->identifier, "COW", 3) == 0));
+                                if (the_car->driver == eDriver_local_human) {
+                                    Achievement_OnPlayerPedKilled(
+                                        impact_speed * WORLD_SCALE / 1600.0f * 3600000.0f,
+                                        is_cow,
+                                        billiards_shot,
+                                        billiards_shot ? (void*)incident_actor : NULL,
+                                        is_footballer,
+                                        proximity_rayed);
+                                }
+                            }
+#endif
                         }
                         if (pPedestrian->ref_number < 100 && the_car->driver >= eDriver_net_human) {
                             if (pPedestrian->murderer == -1 && gNet_mode == eNet_mode_host && gCurrent_net_game->type == eNet_game_type_carnage) {
@@ -2289,7 +2383,17 @@ void DoPedestrian(tPedestrian_data* pPedestrian, int pIndex) {
                 && old_pos.v[Y] == pPedestrian->pos.v[Y]
                 && old_pos.v[Z] + 0.0f == pPedestrian->pos.v[Z]) {
                 if (gReally_stupid_ped_bug_enable || (pPedestrian->actor->parent == gDont_render_actor && pPedestrian->done_initial && pPedestrian->sequences[pPedestrian->current_sequence].frame_rate_type == ePed_frame_speed)) {
-                    ChangeActionTo(pPedestrian, 0, 0);
+#if defined(DETHRACE_FIX_BUGS)
+                    // Suppress this reset when there is active danger — the ped is
+                    // stuck (blocked by car, wall, or undecided path), not genuinely
+                    // idle. Resetting to action 0 while danger > 0 causes immediate
+                    // re-selection of the flee action next frame, producing a rapid
+                    // 0<->1 action oscillation seen as two-state animation flicker.
+                    if (!harness_game_config.fix_ped_spasm || gDanger_level == 0.f)
+#endif
+                    {
+                        ChangeActionTo(pPedestrian, 0, 0);
+                    }
                 }
             }
         }

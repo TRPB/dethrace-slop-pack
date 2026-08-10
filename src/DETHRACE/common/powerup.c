@@ -1,5 +1,7 @@
 #include "powerup.h"
+#include "achievements.h"
 #include "brender.h"
+#include "stats.h"
 #include "car.h"
 #include "controls.h"
 #include "crush.h"
@@ -275,6 +277,12 @@ int GotPowerupX(tCar_spec* pCar, int pIndex, int pTell_net_players, int pDisplay
     if (pCar->driver <= eDriver_non_car) {
         return pIndex;
     }
+#if defined(DETHRACE_FIX_BUGS)
+    if (pCar->driver == eDriver_local_human) {
+        Stats_OnPowerupCollected();
+    }
+    Achievement_OnPowerupCollected(pCar, pIndex);
+#endif
     switch (the_powerup->type) {
     case ePowerup_instantaneous:
         break;
@@ -1168,6 +1176,9 @@ int HitMine(tPowerup* pPowerup, tCar_spec* pCar) {
         for (i = 0; i < COUNT_OF(pCar->damage_units); i++) {
             DamageUnit(pCar, i, IRandomBetween(0, fudge_multiplier * 15.f));
         }
+#if defined(DETHRACE_FIX_BUGS)
+        Achievement_OnMineHit(pCar);
+#endif
     }
     return GET_POWERUP_INDEX(pPowerup);
 }
@@ -1211,6 +1222,9 @@ void HidePedestrians(tPowerup* pPowerup, tCar_spec* pCar) {
 int SetProximity(tPowerup* pPowerup, tCar_spec* pCar) {
 
     pCar->proxy_ray_distance = pPowerup->float_params[0] * pPowerup->float_params[0];
+#if defined(DETHRACE_FIX_BUGS)
+    Achievement_OnProxRayStart(pCar);
+#endif
     return GET_POWERUP_INDEX(pPowerup);
 }
 
@@ -1224,6 +1238,7 @@ void ResetProximity(tPowerup* pPowerup, tCar_spec* pCar) {
     if (CAR_HAS_BUILTIN_PROX_RAY(pCar)) {
         pCar->proxy_ray_distance = CAR_PROX_RAY_DISTANCE;
     }
+    Achievement_OnProxRayEnd(pCar);
 #endif
 }
 

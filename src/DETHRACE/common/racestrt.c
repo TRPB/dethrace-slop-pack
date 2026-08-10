@@ -1,5 +1,6 @@
 #include "racestrt.h"
 #include "player_opponent.h"
+#include "achievements.h"
 #include "brender.h"
 #include "cutscene.h"
 #include "displays.h"
@@ -1666,6 +1667,19 @@ void SelectRaceDraw(int pCurrent_choice, int pCurrent_mode) {
     }
 }
 
+#if defined(DETHRACE_FIX_BUGS)
+// Added by dethrace — Tab key opens achievements from the race start screen
+static int s_achievements_pending;
+
+static int AchievementsHotkey(int* pCurrent_choice, int* pCurrent_mode) {
+    if (harness_game_config.achievements && PDKeyDown(KEY_TAB)) {
+        s_achievements_pending = 1;
+        return 1;
+    }
+    return 0;
+}
+#endif
+
 // IDA: tSO_result __usercall DoSelectRace@<EAX>(int *pSecond_time_around@<EAX>)
 // FUNCTION: CARM95 0x00451c8e
 tSO_result DoSelectRace(int* pSecond_time_around) {
@@ -1802,13 +1816,32 @@ tSO_result DoSelectRace(int* pSecond_time_around) {
         gCurrent_graf_data->start_race_panel_right - gCurrent_graf_data->start_race_panel_left,
         gCurrent_graf_data->start_race_panel_bottom - gCurrent_graf_data->start_race_panel_top);
     LoadRaceInfo(gProgram_state.current_race_index, &gCurrent_race);
+#if defined(DETHRACE_FIX_BUGS)
+    interface_spec.exit_proc = AchievementsHotkey;
+#endif
     do {
         gProgram_state.view_type = 0;
         gOpponent_index = 0;
         gStart_interface_spec = &interface_spec;
+#if defined(DETHRACE_FIX_BUGS)
+        s_achievements_pending = 0;
+#endif
         result = DoInterfaceScreen(&interface_spec, gFaded_palette || gCurrent_splash, default_choice);
         default_choice = 4;
 
+#if defined(DETHRACE_FIX_BUGS)
+        if (s_achievements_pending) {
+            DisposeFlicPanel(0);
+            DoViewAchievements();
+            InitialiseFlicPanel(
+                0,
+                gCurrent_graf_data->start_race_panel_left,
+                gCurrent_graf_data->start_race_panel_top,
+                gCurrent_graf_data->start_race_panel_right - gCurrent_graf_data->start_race_panel_left,
+                gCurrent_graf_data->start_race_panel_bottom - gCurrent_graf_data->start_race_panel_top);
+            result = 1;
+        } else
+#endif
         if (result == 0 || result == 2 || result == 3) {
             DisposeFlicPanel(0);
 

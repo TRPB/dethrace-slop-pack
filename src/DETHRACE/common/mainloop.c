@@ -1,4 +1,5 @@
 #include "mainloop.h"
+#include "achievements.h"
 #include "brender.h"
 #include "car.h"
 #include "controls.h"
@@ -630,6 +631,17 @@ tRace_result MainGameLoop(void) {
         if (!gAction_replay_mode) {
             MungeOpponents(gFrame_period);
             PollCarControls(gFrame_period);
+#if defined(DETHRACE_FIX_BUGS)
+            // Added by dethrace — horn key edge triggers a random achievement popup for testing
+            {
+                static int s_horn_prev = 0;
+                int horn_now = KeyIsDown(58);
+                if (horn_now && !s_horn_prev) {
+                    Achievement_TriggerRandomPopup();
+                }
+                s_horn_prev = horn_now;
+            }
+#endif
         }
         PollCameraControls(camera_period);
         if (!gAction_replay_mode) {
@@ -638,6 +650,9 @@ tRace_result MainGameLoop(void) {
             PipeCarPositions();
             NetSendMessageStacks();
             CheckRecoveryOfCars(gLast_tick_count - gRace_start + gFrame_period);
+#if defined(DETHRACE_FIX_BUGS)
+            Achievement_OnPlayerCarFrame(&gProgram_state.current_car);
+#endif
         } else {
             DoActionReplay(gFrame_period);
         }

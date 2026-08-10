@@ -76,6 +76,8 @@ target_sources(dethrace_obj PRIVATE
     common/world.c
     common/network.c
 
+    common/achievements.c
+    common/achievements.h
     common/brucetrk.c
     common/brucetrk.h
     common/car.c
@@ -154,6 +156,8 @@ target_sources(dethrace_obj PRIVATE
     common/sound.h
     common/spark.c
     common/spark.h
+    common/stats.c
+    common/stats.h
     common/structur.c
     common/structur.h
     common/trig.c

@@ -1,4 +1,6 @@
 #include "displays.h"
+#include "achievements.h"
+#include "stats.h"
 #include "brender.h"
 #include "constants.h"
 #include "controls.h"
@@ -1604,6 +1606,12 @@ void EarnCredits2(int pAmount, char* pPrefix_text) {
     if (gRace_finished) {
         return;
     }
+#if defined(DETHRACE_FIX_BUGS)
+    if (pAmount > 0) {
+        Stats_OnCreditsEarned((tU32)pAmount);
+    }
+    Achievement_OnCreditsEarned((tU32)pAmount);
+#endif
     the_time = GetTotalTime();
     if (pAmount != 0) {
         if (gNet_mode != eNet_mode_none && gProgram_state.credits_earned - gProgram_state.credits_lost + pAmount < 0) {

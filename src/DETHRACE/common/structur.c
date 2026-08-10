@@ -1,4 +1,6 @@
 #include "structur.h"
+#include "achievements.h"
+#include "stats.h"
 #include "car.h"
 #include "controls.h"
 #include "crush.h"
@@ -13,6 +15,7 @@
 #include "graphics.h"
 #include "harness/config.h"
 #include "harness/meld.h"
+#include "newgame.h"
 #include "harness/trace.h"
 #include "init.h"
 #include "loading.h"
@@ -103,6 +106,10 @@ void RaceCompleted(tRace_over_reason pReason) {
             ChangeAmbientPratcam(kPratcam_race_complete);
         }
         gRace_over_reason = pReason;
+#if defined(DETHRACE_FIX_BUGS)
+        Stats_OnRaceResult(pReason);
+        Achievement_OnRaceResult(pReason);
+#endif
         if (gMap_mode) {
             ToggleMap();
         }
@@ -375,6 +382,12 @@ int ChooseOpponent(int pNastiness, int* pHad_scum) {
     // car_number used by the unchosen player character (Max=100, Anna=101).
     // Variants of that character are eligible regardless of nastiness band.
     int other_player_car_number = gProgram_state.frank_or_anniness == eFrankie ? 101 : 100;
+    // Without meld, OPPONENT.TXT contains all colour variants of the other
+    // player's car (ANNBLUE, ANNBLAK, etc.). Restrict to the canonical starting
+    // car so a colour variant is never picked instead of the yellow default.
+    char* other_player_car_file = !gMeld_active
+        ? gBasic_car_names[gProgram_state.frank_or_anniness == eFrankie ? 1 : 0]
+        : NULL;
 #else
     int temp_array[40];
 #endif
@@ -383,7 +396,7 @@ int ChooseOpponent(int pNastiness, int* pHad_scum) {
     for (i = 0; i < gNumber_of_racers; ++i) {
         if ((gOpponents[i].strength_rating == pNastiness
 #ifdef DETHRACE_FIX_BUGS
-             || (harness_game_config.add_other_player_as_opponent && gOpponents[i].car_number == other_player_car_number)
+             || (harness_game_config.add_other_player_as_opponent && gOpponents[i].car_number == other_player_car_number && (other_player_car_file == NULL || strcasecmp(gOpponents[i].car_file_name, other_player_car_file) == 0))
 #endif
             )
             && gProgram_state.current_car.index != i
@@ -647,6 +660,9 @@ void DoGame(void) {
             }
             PrintMemoryDump(0, "AFTER LOADING OPPONENTS IN");
             InitRace();
+#if defined(DETHRACE_FIX_BUGS)
+            Achievement_OnRaceStart();
+#endif
             if (gNet_mode_of_last_game != gNet_mode) {
                 gProgram_state.prog_status = eProg_idling;
             } else {

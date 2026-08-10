@@ -1,4 +1,6 @@
 #include "crush.h"
+#include "achievements.h"
+#include "stats.h"
 #include "brender.h"
 #include "car.h"
 #include "displays.h"
@@ -985,6 +987,9 @@ void StealCar(tCar_spec* pCar) {
     gProgram_state.cars_available[gProgram_state.number_of_cars] = pCar->index;
     gProgram_state.number_of_cars++;
     gOpponents[pCar->index].dead = 1;
+#if defined(DETHRACE_FIX_BUGS)
+    Achievement_OnCarStolen();
+#endif
 }
 
 // IDA: int __usercall DoCrashEarnings@<EAX>(tCar_spec *pCar1@<EAX>, tCar_spec *pCar2@<EDX>)
@@ -1199,6 +1204,9 @@ int DoCrashEarnings(tCar_spec* pCar1, tCar_spec* pCar2) {
                     } else {
                         PratcamEvent(kPratcam_opponent_wasted);
                         DoFancyHeadup(kFancyHeadupYouWastedEm);
+#if defined(DETHRACE_FIX_BUGS)
+                        Achievement_OnOpponentWasted(gOpponents[victim->index].name, victim->index);
+#endif
                         credits = 100 * (int)((sqr(0.7 / victim->car_model_actors[victim->principal_car_actor].crush_data.softness_factor) * gWasted_creds[gProgram_state.skill_level] + 50.0f) / 100.0);
                         AwardTime(gWasted_time[gProgram_state.skill_level]);
                         EarnCredits(credits);

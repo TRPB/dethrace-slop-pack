@@ -1,4 +1,5 @@
 #include "racesumm.h"
+#include "achievements.h"
 #include "brender.h"
 #include "crush.h"
 #include "cutscene.h"
@@ -135,6 +136,9 @@ void MungeRankEtc(tProgram_state* pThe_state) {
             }
 
             pThe_state->game_completed = !not_done_yet;
+#if defined(DETHRACE_FIX_BUGS)
+            Achievement_OnAllRacesDone(pThe_state->game_completed);
+#endif
         }
         pThe_state->credits += pThe_state->credits_earned - pThe_state->credits_lost;
         if (pThe_state->credits > 999999) {

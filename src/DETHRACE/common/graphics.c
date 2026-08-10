@@ -1,5 +1,6 @@
 #include "graphics.h"
 
+#include "achievements.h"
 #include "brender.h"
 #include "car.h"
 #include "constants.h"
@@ -2416,6 +2417,11 @@ void RenderAFrame(int pDepth_mask_on) {
             DrawPowerups(the_time);
         }
     }
+#if defined(DETHRACE_FIX_BUGS)
+    if (!gAction_replay_mode) {
+        Achievement_DrawPopup();
+    }
+#endif
     if (gNet_mode != eNet_mode_none) {
         DisplayUserMessage();
     }

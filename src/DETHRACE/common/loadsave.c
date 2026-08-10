@@ -1,4 +1,6 @@
 #include "loadsave.h"
+#include "achievements.h"
+#include "stats.h"
 #include "brender.h"
 #include "brhton.h"
 #include "cutscene.h"
@@ -223,6 +225,10 @@ void LoadTheGame(int pSlot_index) {
     SetSoundVolumes();
     gProgram_state.saving = 0;
     SelectOpponents(&gCurrent_race);
+#if defined(DETHRACE_FIX_BUGS)
+    Stats_Load(pSlot_index);
+    Achievements_Load(pSlot_index);
+#endif
 }
 
 // IDA: void __cdecl StartRollingSaveNamesIn()
@@ -609,6 +615,10 @@ void SaveTheGame(int pSlot_number) {
     FILE* f;
 
     gSaved_games[pSlot_number]->checksum = CalcLSChecksum(gSaved_games[pSlot_number]);
+#if defined(DETHRACE_FIX_BUGS)
+    Stats_Save(pSlot_number);
+    Achievements_Save(pSlot_number);
+#endif
 #ifdef DETHRACE_FIX_BUGS
     if (gMeld_active) {
         PathCat(the_path, gApplication_path, "SAVEGAME_M");

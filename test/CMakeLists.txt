@@ -13,6 +13,8 @@ target_include_directories(dethrace_test PRIVATE
     ${CMAKE_SOURCE_DIR}/src/DETHRACE/pd
 )
 
+target_compile_definitions(dethrace_test PRIVATE DETHRACE_FIX_BUGS)
+
 if(NOT MSVC)
 else()
     target_compile_definitions(dethrace_test PRIVATE -D_CRT_SECURE_NO_WARNINGS -DSDL_MAIN_HANDLED -DWIN32_LEAN_AND_MEAN)
@@ -20,6 +22,8 @@ else()
 endif()
 
 target_sources(dethrace_test PRIVATE
+    DETHRACE/test_stats.c
+    DETHRACE/test_structur.c
     DETHRACE/test_controls.c
     DETHRACE/test_dossys.c
     DETHRACE/test_flicplay.c

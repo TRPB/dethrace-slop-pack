@@ -27,6 +27,8 @@
 
 #define debug(format_, ...) fprintf(stderr, format_, __VA_ARGS__)
 
+extern void test_stats_suite();
+extern void test_structur_suite();
 extern void test_utility_suite();
 extern void test_loading_suite();
 extern void test_controls_suite();
@@ -224,6 +226,8 @@ int main(int argc, char** argv) {
     printf("Completed setup\n");
 
     // DETHRACE
+    test_stats_suite();
+    test_structur_suite();
     test_utility_suite();
     test_init_suite();
     test_loading_suite();
