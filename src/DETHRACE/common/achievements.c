@@ -22,6 +22,8 @@
 #include "sound.h"
 #include "utility.h"
 
+#if defined(DETHRACE_FIX_BUGS)
+
 // Added by dethrace
 // image_file for PIX: "CONTAINER.PIX|FRAMENAME.PIX" to load a specific still frame.
 // image_file for FLI: just the filename; freeze on first frame via ChangePanelFlic+EndFlic.
@@ -391,7 +393,7 @@ static void AchBlitScaled(br_pixelmap* src, int sx, int sy, int sw, int sh,
             int sx1 = (sx0 + 1 < sw) ? sx0 + 1 : sx0;
             int wx = fx & 0xff;
             int wx1 = 256 - wx, wy1 = 256 - wy;
-
+            int r, g, b;
             tU8 p00 = row0[sx + sx0], p10 = row0[sx + sx1];
             tU8 p01 = row1[sx + sx0], p11 = row1[sx + sx1];
 
@@ -409,9 +411,9 @@ static void AchBlitScaled(br_pixelmap* src, int sx, int sy, int sw, int sh,
             }
 
             // bilinear blend in flic-palette RGB space
-            int r = (fp[p00 * 4    ] * wx1 * wy1 + fp[p10 * 4    ] * wx * wy1 + fp[p01 * 4    ] * wx1 * wy + fp[p11 * 4    ] * wx * wy) >> 16;
-            int g = (fp[p00 * 4 + 1] * wx1 * wy1 + fp[p10 * 4 + 1] * wx * wy1 + fp[p01 * 4 + 1] * wx1 * wy + fp[p11 * 4 + 1] * wx * wy) >> 16;
-            int b = (fp[p00 * 4 + 2] * wx1 * wy1 + fp[p10 * 4 + 2] * wx * wy1 + fp[p01 * 4 + 2] * wx1 * wy + fp[p11 * 4 + 2] * wx * wy) >> 16;
+            r = (fp[p00 * 4    ] * wx1 * wy1 + fp[p10 * 4    ] * wx * wy1 + fp[p01 * 4    ] * wx1 * wy + fp[p11 * 4    ] * wx * wy) >> 16;
+            g = (fp[p00 * 4 + 1] * wx1 * wy1 + fp[p10 * 4 + 1] * wx * wy1 + fp[p01 * 4 + 1] * wx1 * wy + fp[p11 * 4 + 1] * wx * wy) >> 16;
+            b = (fp[p00 * 4 + 2] * wx1 * wy1 + fp[p10 * 4 + 2] * wx * wy1 + fp[p01 * 4 + 2] * wx1 * wy + fp[p11 * 4 + 2] * wx * wy) >> 16;
 
             dst_row[dx + x] = gAch_rgb5_to_flic[(r >> 3) * 1024 + (g >> 3) * 32 + (b >> 3)];
         }
@@ -441,6 +443,8 @@ static void PopupBlitScaled(br_pixelmap* src, int sx, int sy, int sw, int sh,
             int sx1 = (sx0 + 1 < sw) ? sx0 + 1 : sx0;
             int wx = fx & 0xff;
             int wx1 = 256 - wx, wy1 = 256 - wy;
+            int cr, cg, cb;
+            tU8 rend_idx;
             tU8 p00 = row0[sx + sx0], p10 = row0[sx + sx1];
             tU8 p01 = row1[sx + sx0], p11 = row1[sx + sx1];
             tU8 pnn = (wx < 128) ? ((wy < 128) ? p00 : p01) : ((wy < 128) ? p10 : p11);
@@ -449,10 +453,10 @@ static void PopupBlitScaled(br_pixelmap* src, int sx, int sy, int sw, int sh,
             if (!p10) p10 = pnn;
             if (!p01) p01 = pnn;
             if (!p11) p11 = pnn;
-            int cr = (rp[p00 * 4    ] * wx1 * wy1 + rp[p10 * 4    ] * wx * wy1 + rp[p01 * 4    ] * wx1 * wy + rp[p11 * 4    ] * wx * wy) >> 16;
-            int cg = (rp[p00 * 4 + 1] * wx1 * wy1 + rp[p10 * 4 + 1] * wx * wy1 + rp[p01 * 4 + 1] * wx1 * wy + rp[p11 * 4 + 1] * wx * wy) >> 16;
-            int cb = (rp[p00 * 4 + 2] * wx1 * wy1 + rp[p10 * 4 + 2] * wx * wy1 + rp[p01 * 4 + 2] * wx1 * wy + rp[p11 * 4 + 2] * wx * wy) >> 16;
-            tU8 rend_idx = gAch_rgb5_to_rend[(cr >> 3) * 1024 + (cg >> 3) * 32 + (cb >> 3)];
+            cr = (rp[p00 * 4    ] * wx1 * wy1 + rp[p10 * 4    ] * wx * wy1 + rp[p01 * 4    ] * wx1 * wy + rp[p11 * 4    ] * wx * wy) >> 16;
+            cg = (rp[p00 * 4 + 1] * wx1 * wy1 + rp[p10 * 4 + 1] * wx * wy1 + rp[p01 * 4 + 1] * wx1 * wy + rp[p11 * 4 + 1] * wx * wy) >> 16;
+            cb = (rp[p00 * 4 + 2] * wx1 * wy1 + rp[p10 * 4 + 2] * wx * wy1 + rp[p01 * 4 + 2] * wx1 * wy + rp[p11 * 4 + 2] * wx * wy) >> 16;
+            rend_idx = gAch_rgb5_to_rend[(cr >> 3) * 1024 + (cg >> 3) * 32 + (cb >> 3)];
             if (is_rgb565) {
                 *(tU16*)(dst_row + (dx + x) * 2) = PaletteEntry16Bit(gRender_palette, rend_idx);
             } else {
@@ -485,6 +489,8 @@ static void PopupBlitScaledMug(br_pixelmap* src, int sx, int sy, int sw, int sh,
             int sx1 = (sx0 + 1 < sw) ? sx0 + 1 : sx0;
             int wx = fx & 0xff;
             int wx1 = 256 - wx, wy1 = 256 - wy;
+            int cr, cg, cb;
+            tU8 rend_idx;
             tU8 p00 = row0[sx + sx0], p10 = row0[sx + sx1];
             tU8 p01 = row1[sx + sx0], p11 = row1[sx + sx1];
             tU8 pnn = (wx < 128) ? ((wy < 128) ? p00 : p01) : ((wy < 128) ? p10 : p11);
@@ -493,10 +499,10 @@ static void PopupBlitScaledMug(br_pixelmap* src, int sx, int sy, int sw, int sh,
             if (!p10) p10 = pnn;
             if (!p01) p01 = pnn;
             if (!p11) p11 = pnn;
-            int cr = (fp[p00*4]*wx1*wy1 + fp[p10*4]*wx*wy1 + fp[p01*4]*wx1*wy + fp[p11*4]*wx*wy) >> 16;
-            int cg = (fp[p00*4+1]*wx1*wy1 + fp[p10*4+1]*wx*wy1 + fp[p01*4+1]*wx1*wy + fp[p11*4+1]*wx*wy) >> 16;
-            int cb = (fp[p00*4+2]*wx1*wy1 + fp[p10*4+2]*wx*wy1 + fp[p01*4+2]*wx1*wy + fp[p11*4+2]*wx*wy) >> 16;
-            tU8 rend_idx = gAch_rgb5_to_rend[(cr >> 3) * 1024 + (cg >> 3) * 32 + (cb >> 3)];
+            cr = (fp[p00*4]*wx1*wy1 + fp[p10*4]*wx*wy1 + fp[p01*4]*wx1*wy + fp[p11*4]*wx*wy) >> 16;
+            cg = (fp[p00*4+1]*wx1*wy1 + fp[p10*4+1]*wx*wy1 + fp[p01*4+1]*wx1*wy + fp[p11*4+1]*wx*wy) >> 16;
+            cb = (fp[p00*4+2]*wx1*wy1 + fp[p10*4+2]*wx*wy1 + fp[p01*4+2]*wx1*wy + fp[p11*4+2]*wx*wy) >> 16;
+            rend_idx = gAch_rgb5_to_rend[(cr >> 3) * 1024 + (cg >> 3) * 32 + (cb >> 3)];
             if (is_rgb565) {
                 *(tU16*)(dst_row + (dx + x) * 2) = PaletteEntry16Bit(gRender_palette, rend_idx);
             } else {
@@ -860,6 +866,9 @@ static void DrawStatsPage(void) {
     int text_left;
     int y;
     int line_h;
+    int num_rows;
+    int i;
+    tU32 stat_values[8];
     char buf[48];
 
     static const struct { const char* label; } kStatRows[] = {
@@ -897,12 +906,14 @@ static void DrawStatsPage(void) {
         int src_h = gAch_ped_flic_h;
         int dst_w = col_img_w;
         int dst_h = (src_w > 0) ? dst_w * src_h / src_w : body_h;
+        int dst_x;
+        int dst_y;
         if (dst_h > body_h) {
             dst_h = body_h;
             dst_w = (src_h > 0) ? dst_h * src_w / src_h : col_img_w;
         }
-        int dst_x = panel_left + (col_img_w - dst_w) / 2;
-        int dst_y = body_top + (body_h - dst_h) / 2;
+        dst_x = panel_left + (col_img_w - dst_w) / 2;
+        dst_y = body_top + (body_h - dst_h) / 2;
         AchBlitScaled(gPanel_buffer[0], 0, 0, src_w, src_h,
             gBack_screen, dst_x, dst_y, dst_w, dst_h, NULL);
         text_left = panel_left + col_img_w + 4;
@@ -913,7 +924,6 @@ static void DrawStatsPage(void) {
     line_h = gFont_7->glyph_y + 2;
     y = body_top + 2;
 
-    tU32 stat_values[8];
     stat_values[0] = gGame_stats.total_races_won;
     stat_values[1] = gGame_stats.races_won_by_peds;
     stat_values[2] = gGame_stats.races_won_by_checkpoints;
@@ -923,8 +933,8 @@ static void DrawStatsPage(void) {
     stat_values[6] = gGame_stats.total_opponents_wasted;
     stat_values[7] = gGame_stats.total_powerups_collected;
 
-    int num_rows = (int)(sizeof(kStatRows) / sizeof(kStatRows[0]));
-    for (int i = 0; i < num_rows; i++) {
+    num_rows = (int)(sizeof(kStatRows) / sizeof(kStatRows[0]));
+    for (i = 0; i < num_rows; i++) {
         int label_w;
         int val_w;
         if (y + line_h > panel_bottom - 2) break;
@@ -1003,17 +1013,13 @@ static int AchGetProgress(int idx, tU32* out_current, tU32* out_max) {
 
 // Added by dethrace
 static void DrawAchievement(int pCurrent_choice, int pCurrent_mode) {
-    if (gCurrent_achievement_index < 0) {
-        DrawStatsPage();
-        return;
-    }
-    const tAchievement* ach = &gAchievement_list[gCurrent_achievement_index];
-    int panel_left = gCurrent_graf_data->change_car_panel_left;
-    int panel_top = gCurrent_graf_data->change_car_panel_top;
-    int panel_right = gCurrent_graf_data->change_car_panel_right;
-    int panel_bottom = gCurrent_graf_data->change_car_panel_bottom;
-    int panel_w = panel_right - panel_left;
-    int panel_h = panel_bottom - panel_top;
+    const tAchievement* ach;
+    int panel_left;
+    int panel_top;
+    int panel_right;
+    int panel_bottom;
+    int panel_w;
+    int panel_h;
     int title_h;
     int sep_y;
     int desc_top;
@@ -1041,6 +1047,18 @@ static void DrawAchievement(int pCurrent_choice, int pCurrent_mode) {
     char count_str[16];
     char unlocked_str[32];
     char prog_str[32];
+
+    if (gCurrent_achievement_index < 0) {
+        DrawStatsPage();
+        return;
+    }
+    ach = &gAchievement_list[gCurrent_achievement_index];
+    panel_left = gCurrent_graf_data->change_car_panel_left;
+    panel_top = gCurrent_graf_data->change_car_panel_top;
+    panel_right = gCurrent_graf_data->change_car_panel_right;
+    panel_bottom = gCurrent_graf_data->change_car_panel_bottom;
+    panel_w = panel_right - panel_left;
+    panel_h = panel_bottom - panel_top;
 
     LoadFont(kFont_ORANGHED);
     title_h = gFonts[kFont_ORANGHED].height;
@@ -1090,12 +1108,14 @@ static void DrawAchievement(int pCurrent_choice, int pCurrent_mode) {
         int src_h = gAch_ped_pixelmap->height;
         int dst_w = col_w;
         int dst_h = (src_w > 0) ? dst_w * src_h / src_w : body_h;
+        int dst_x;
+        int dst_y;
         if (dst_h > body_h) {
             dst_h = body_h;
             dst_w = (src_h > 0) ? dst_h * src_w / src_h : col_w;
         }
-        int dst_x = panel_left + (col_w - dst_w) / 2;
-        int dst_y = desc_top + (body_h - dst_h) / 2;
+        dst_x = panel_left + (col_w - dst_w) / 2;
+        dst_y = desc_top + (body_h - dst_h) / 2;
         AchBlitScaled(gAch_ped_pixelmap, 0, 0, src_w, src_h,
             gBack_screen, dst_x, dst_y, dst_w, dst_h, gAch_rend2flc);
         text_col_left = panel_left + col_w + 2;
@@ -1106,12 +1126,14 @@ static void DrawAchievement(int pCurrent_choice, int pCurrent_mode) {
         int src_h = gCurrent_graf_data->dare_mugshot_height;
         int dst_w = col_w;
         int dst_h = (src_w > 0) ? dst_w * src_h / src_w : body_h;
+        int dst_x;
+        int dst_y;
         if (dst_h > body_h) {
             dst_h = body_h;
             dst_w = (src_h > 0) ? dst_h * src_w / src_h : col_w;
         }
-        int dst_x = panel_left + (col_w - dst_w) / 2;
-        int dst_y = desc_top + (body_h - dst_h) / 2;
+        dst_x = panel_left + (col_w - dst_w) / 2;
+        dst_y = desc_top + (body_h - dst_h) / 2;
         AchBlitScaled(gPanel_buffer[0],
             gCurrent_graf_data->dare_mug_left_margin,
             gCurrent_graf_data->dare_mug_top_margin,
@@ -1125,12 +1147,14 @@ static void DrawAchievement(int pCurrent_choice, int pCurrent_mode) {
         int src_h = gAch_ped_flic_h;
         int dst_w = col_w;
         int dst_h = (src_w > 0) ? dst_w * src_h / src_w : body_h;
+        int dst_x;
+        int dst_y;
         if (dst_h > body_h) {
             dst_h = body_h;
             dst_w = (src_h > 0) ? dst_h * src_w / src_h : col_w;
         }
-        int dst_x = panel_left + (col_w - dst_w) / 2;
-        int dst_y = desc_top + (body_h - dst_h) / 2;
+        dst_x = panel_left + (col_w - dst_w) / 2;
+        dst_y = desc_top + (body_h - dst_h) / 2;
         AchBlitScaled(gPanel_buffer[0], 0, 0, src_w, src_h,
             gBack_screen, dst_x, dst_y, dst_w, dst_h, NULL);
         text_col_left = panel_left + col_w + 2;
@@ -1913,3 +1937,5 @@ void Achievement_DrawPopup(void) {
             text_col_white, text_col_orange, text_col_grey, sep_col);
     }
 }
+
+#endif // DETHRACE_FIX_BUGS
