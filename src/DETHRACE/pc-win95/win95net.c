@@ -477,6 +477,11 @@ int PDNetJoinGame(tNet_game_details* pDetails, char* pPlayer_name) {
     return 0;
 }
 
+// Added by dethrace
+int PDNetPreJoinForCarSelection(tNet_game_details* pDetails) {
+    return 0;
+}
+
 // IDA: void __usercall PDNetLeaveGame(tNet_game_details *pDetails@<EAX>)
 // FUNCTION: CARM95 0x004551C3
 void PDNetLeaveGame(tNet_game_details* pDetails) {
