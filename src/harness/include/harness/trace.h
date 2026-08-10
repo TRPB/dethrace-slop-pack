@@ -3,6 +3,12 @@
 
 #include "brender.h"
 #include <stdlib.h>
+#include <string.h>
+
+#ifdef _MSC_VER
+#define strncasecmp _strnicmp
+#define strcasecmp _stricmp
+#endif
 
 extern int harness_debug_level;
 
