@@ -1230,18 +1230,16 @@ void SmokeCircle(br_vector3* o, br_scalar r, br_scalar extra_z, br_scalar streng
 
 // IDA: int __cdecl CmpSmokeZ(void *p1, void *p2)
 int CmpSmokeZ(const void* p1, const void* p2) {
-    tBRender_smoke** a;
-    tBRender_smoke** b;
-
-    a = (tBRender_smoke**)p1;
-    b = (tBRender_smoke**)p2;
-    if ((*a)->pos.v[2] == (*b)->pos.v[2]) {
-        return 0;
-    } else if ((*a)->pos.v[2] > (*b)->pos.v[2]) {
-        return 1;
-    } else {
-        return -1;
-    }
+    float za = (*(tBRender_smoke**)p1)->pos.v[2];
+    float zb = (*(tBRender_smoke**)p2)->pos.v[2];
+    // Use < / > instead of == / > to be NaN-safe. With == / >, NaN comparisons
+    // all return false and fall through to the -1 branch, making BrQsort's inner
+    // scan think every element is less than the pivot and walk past the array end.
+    // With < / >, NaN comparisons also return false but fall through to return 0
+    // (equal), which stops the scan safely.
+    if (za < zb) return -1;
+    if (za > zb) return 1;
+    return 0;
 }
 
 // IDA: void __cdecl RenderRecordedSmokeCircles()

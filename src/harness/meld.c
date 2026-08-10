@@ -963,29 +963,34 @@ static void meld_build_opponents(void) {
             if (rc <= 0) {
                 break;
             }
+            // For player-character entries (car_number 100/101) keep only:
+            //  - the FIRST occurrence per game (canonical starting car)
+            //  - the yellow Eagle specifically (EAGYELE.TXT) for Max
+            // Everything else (EAGBLAK, ANNBLUE, etc.) inflates the pool and
+            // causes the player character to appear in nearly every race.
+            // IMPORTANT: claim player_car_first BEFORE the placeholder filter.
+            // In demo dirs the first Anna entry shares art with EAGLERED.FLI
+            // (placeholder), but ANNBLUE.TXT has a unique stolen-car flic and
+            // would pass the placeholder check, appearing as is_first if we
+            // hadn't already claimed the slot.
+            if (s_oppos[s_oppo_raw_count].car_number == 100 || s_oppos[s_oppo_raw_count].car_number == 101) {
+                int ci = (s_oppos[s_oppo_raw_count].car_number == 101) ? 1 : 0;
+                const char* cf = s_oppos[s_oppo_raw_count].car_file;
+                int is_first = !player_car_first[ci];
+                int is_yellow_eagle = (ci == 0) && strcasecmp(cf, "EAGYELE.TXT") == 0;
+                if (is_first) {
+                    player_car_first[ci] = 1;
+                }
+                if (!is_first && !is_yellow_eagle) {
+                    continue;
+                }
+            }
             // Skip demo placeholder entries that have no text AND use shared
             // placeholder graphics (mug_shot == stolen_car_flic). Checking only
             // num_lines would also drop Max and Anna, who legitimately have
             // chunk_count==0 because they are player characters with no flavor text.
             if (s_oppos[s_oppo_raw_count].num_lines <= 9 && s_oppos[s_oppo_raw_count].is_placeholder) {
                 continue;
-            }
-            // For player-character entries (car_number 100/101) keep only:
-            //  - the FIRST occurrence per game (canonical starting car)
-            //  - the yellow Eagle specifically (EAGYELE.TXT) for Max
-            // Everything else (EAGBLAK, ANNBLUE, etc.) inflates the pool and
-            // causes the player character to appear in nearly every race.
-            if (s_oppos[s_oppo_raw_count].car_number == 100 || s_oppos[s_oppo_raw_count].car_number == 101) {
-                int ci = (s_oppos[s_oppo_raw_count].car_number == 101) ? 1 : 0;
-                const char* cf = s_oppos[s_oppo_raw_count].car_file;
-                int is_first = !player_car_first[ci];
-                int is_yellow_eagle = (ci == 0) && strcasecmp(cf, "EAGYELE.TXT") == 0;
-                if (!is_first && !is_yellow_eagle) {
-                    continue;
-                }
-                if (is_first) {
-                    player_car_first[ci] = 1;
-                }
             }
             s_oppo_raw_count++;
         }
