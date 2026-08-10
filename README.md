@@ -8,7 +8,7 @@ So consider this more of a mod that is just for fun: A wishlist for what I want 
 
 ![Screenshot 1](docs/screenshot1.png)
 ![Screenshot 2](docs/screenshot2.png)
-![Screenshot 3](docs/achievement01.png)
+![Screenshot 3](docs/achievement01.jpg)
 ![Screenshot 4](docs/achievement02.jpg)
 
 
