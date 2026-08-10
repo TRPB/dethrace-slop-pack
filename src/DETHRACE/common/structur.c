@@ -396,7 +396,7 @@ int ChooseOpponent(int pNastiness, int* pHad_scum) {
     for (i = 0; i < gNumber_of_racers; ++i) {
         if ((gOpponents[i].strength_rating == pNastiness
 #ifdef DETHRACE_FIX_BUGS
-             || (harness_game_config.add_other_player_as_opponent && gOpponents[i].car_number == other_player_car_number && (other_player_car_file == NULL || strcasecmp(gOpponents[i].car_file_name, other_player_car_file) == 0))
+             || (harness_game_config.add_other_player_as_opponent && gOpponents[i].car_number == other_player_car_number && (other_player_car_file == NULL || gOpponents[i].car_file_name[0] == '\0' || strcasecmp(gOpponents[i].car_file_name, other_player_car_file) == 0))
 #endif
             )
             && gProgram_state.current_car.index != i
