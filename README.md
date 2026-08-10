@@ -8,6 +8,8 @@ So consider this more of a mod that is just for fun: A wishlist for what I want 
 
 ![Screenshot 1](docs/screenshot1.png)
 ![Screenshot 2](docs/screenshot2.png)
+![Screenshot 3](docs/achievement01.png)
+![Screenshot 4](docs/achievement02.jpg)
 
 
 ## Features - Graphics
@@ -22,8 +24,10 @@ So consider this more of a mod that is just for fun: A wishlist for what I want 
 - Tyre skids/blood/oil decals are no longer hovering slightly above the ground
 
 ## Features - Gameplay
+- Achievements
 - Dynamic meld - Content from every game listed in `[Games]` will be melded at the engine level without needing a mod that changes game files. Cars, tracks, etc all get melded so you can have a single campaign with all the content. Tested with Carmageddon, Splat Pack and Xmas Demo.
 - When melding, can optionally add the two multiplayer arena tracks into the campaign, you'll get SUMO and COLISEUM as campaign tracks. There is no starting grid since you and opponents use the multiplayer starting positions. No peds, no checkpoints, just last man standing.
+- When melding can add the other player character as an opponent (e.g. if you race as Max you can race against Die Anna as an opponent in the campaign)
 - Allow configuration of stealworthyness (all cars can be stolen, steal percentage probability, and disabling of rank gate)
 
 ## Features - Quality of life
@@ -31,7 +35,8 @@ So consider this more of a mod that is just for fun: A wishlist for what I want 
 - Easier modding, see [Modding](#modding) below
 
 ## Bug fixes
-- Camera judder fix when car is driving up ramp (rendering only, no physics change, works best with PhysicsPerFrame=1, bug has been present since original 1997 game)
+- Camera judder fix when car is driving up ramp (rendering only, no physics change, works best with PhysicsPerFrame=1, my biggest annoyance with the game since 1997!)
+- Pedestrian spasm fix where peds alternate between two poses every frame and it looks like flickering (This has also bugged me since 1997) 
 - 3dfx mode fog causing odd game tint (Dethrace bug)
 - Fix z-fighting when draw distance is massively increased (SDL config issue in Dethrace)
 - Submersion physics properly applied, can't drive without water physics while under water (Dethrace bug)
@@ -48,7 +53,6 @@ Can all be tuned in dethrace.ini
 ## Potential future improvements
 
 - Buy button in wreck gallery for purchasing cars Carmageddon 2 style
-- Achievements - just for fun, who wouldn't want an achievment to pop up when you kill your 10,000th ped 
 - Add existing AI as multiplayer mode bots
 
 ## Install
@@ -77,6 +81,8 @@ MeldBothStartingCars = 1
 ; as arena races during the single player campaign
 MeldNetRaces = 1
 
+; Enable achievements 
+Achievements=1
 
 ; Custom resolution, aspect ratio is based on this, for 4:3 choose a 4:3 resolution (suggest window mode if you do this since your monitor probably won't support it natively)
 Width = 3840
@@ -96,6 +102,9 @@ CameraJudderFix = 1
 ; - Opponents
 ; - Powerups
 ExtendDrawDistance = 1
+
+; Prevent the pedestrian spasm bug that has bugged me since 1997 where a pedestrian will swap between the same two poses every two frames
+FixPedSpasm =1
 
 ; Allow stealing any car regardless of type (default 0)
 StealworthyAllCars = 1
