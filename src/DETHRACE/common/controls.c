@@ -1,4 +1,6 @@
 #include "controls.h"
+#include "achievements.h"
+#include "stats.h"
 
 #include "brender.h"
 #include "brucetrk.h"
@@ -35,6 +37,7 @@
 #include "structur.h"
 #include "utility.h"
 #include "world.h"
+#include "harness/config.h"
 #include <stdlib.h>
 
 // GLOBAL: CARM95 0x0051b1c0
@@ -1290,6 +1293,9 @@ void CheckForBeingOutOfThisWorld(void) {
         sLast_check = the_time;
         if (HasCarFallenOffWorld(&gProgram_state.current_car)) {
             gRecover_timer = 3000;
+#if defined(DETHRACE_FIX_BUGS)
+            Achievement_OnFallenOffWorld();
+#endif
         }
     }
     if (IsCarInTheSea()) {
@@ -1629,6 +1635,10 @@ void CheckOtherRacingKeys(void) {
                 }
                 if (!gFree_repairs) {
                     cost += SpendCredits(cost);
+#if defined(DETHRACE_FIX_BUGS)
+                    Stats_OnRepairSpent(cost);
+                    Achievement_OnRepairSpent();
+#endif
                 }
                 total_repair_cost += cost;
                 if (total_repair_cost) {
@@ -2083,7 +2093,8 @@ void PollCameraControls(tU32 pTime_difference) {
                 gCamera_zoom = 1.0f;
             }
         }
-        if (KeyIsDown(30) || (up_and_down_mode && going_up)) {
+        if (KeyIsDown(30) || (up_and_down_mode && going_up)
+                || (harness_game_config.allow_all_key_remapping && KeyIsDown(KEYMAP_LOOK_FORWARD))) {
             gCamera_zoom = gCamera_zoom - pTime_difference * TIME_CONV_THING / (double)(2 * swirl_mode + 1);
             if (gCamera_zoom < 0.1f) {
                 gCamera_zoom = 0.1f;
@@ -2099,8 +2110,8 @@ void PollCameraControls(tU32 pTime_difference) {
             left = 1;
             right = 0;
         } else {
-            left = KeyIsDown(32);
-            right = KeyIsDown(33);
+            left = KeyIsDown(32) || (harness_game_config.allow_all_key_remapping && KeyIsDown(KEYMAP_LOOK_LEFT));
+            right = KeyIsDown(33) || (harness_game_config.allow_all_key_remapping && KeyIsDown(KEYMAP_LOOK_RIGHT));
         }
 
         if ((gCamera_sign ? left : right)) {

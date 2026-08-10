@@ -1316,9 +1316,13 @@ int KeyAssignGoAhead(int* pCurrent_choice, int* pCurrent_mode) {
                                 }
                             }
                             if (gPending_entry < 0) {
-                                DRS3StartSound(gEffects_outlet, 3100);
-                                key = -1;
-                                break;
+                                if (harness_game_config.allow_all_key_remapping) {
+                                    gKey_mapping[i] = -2;
+                                } else {
+                                    DRS3StartSound(gEffects_outlet, 3100);
+                                    key = -1;
+                                    break;
+                                }
                             }
                         }
                     }

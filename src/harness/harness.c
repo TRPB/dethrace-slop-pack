@@ -285,6 +285,8 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.physics_per_frame = 0;
     harness_game_config.fix_ped_spasm = 0;
     harness_game_config.add_other_player_as_opponent = 0;
+    harness_game_config.achievements = 0;
+    harness_game_config.allow_all_key_remapping = 0;
     harness_game_config.camera_judder_fix = 1;
     harness_game_config.stealworthy_all_cars = 0;
     harness_game_config.stealworthy_percentage = 50;
@@ -354,7 +356,7 @@ int Harness_Init(int* argc, char* argv[]) {
         Harness_DetectGameMode();
     }
 
-    if (harness_game_config.opengl_3dfx_mode && !harness_game_info.data_dir_has_3dfx_assets) {
+    if (!force_null_platform && harness_game_config.opengl_3dfx_mode && !harness_game_info.data_dir_has_3dfx_assets) {
         printf("Error: data directory does not contain 3dfx assets so opengl mode cannot be used\n");
         exit(1);
     }
@@ -600,6 +602,10 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.add_other_player_as_opponent = (value[0] == '1');
     } else if (MATCH("Slop", "RelayServer")) {
         safe_strcpy(harness_game_config.relay_server, value);
+    } else if (MATCH("Slop", "Achievements")) {
+        harness_game_config.achievements = (value[0] == '1');
+    } else if (MATCH("Slop", "AllowAllKeyRemapping")) {
+        harness_game_config.allow_all_key_remapping = (value[0] == '1');
     }
 
     else if (MATCH("Developers", "Diagnostics")) {

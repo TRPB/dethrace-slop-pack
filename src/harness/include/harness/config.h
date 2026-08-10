@@ -95,6 +95,10 @@ typedef struct tHarness_game_config {
     char meld_overlay_dir[MAX_PATH];
 
     int add_other_player_as_opponent;
+
+    int achievements;
+
+    int allow_all_key_remapping;
 } tHarness_game_config;
 
 extern tHarness_game_info harness_game_info;
