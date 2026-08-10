@@ -95,7 +95,6 @@ void Achievement_OnMineHit(tCar_spec* pCar);
 void Achievement_OnPlayerCarFrame(tCar_spec* pCar);
 void DoViewAchievements(void);
 void Achievement_TriggerPopup(int idx);
-void Achievement_TriggerRandomPopup(void);
 void Achievement_DrawPopup(void);
 
 #endif // DETHRACE_FIX_BUGS

@@ -1350,10 +1350,8 @@ void Achievement_OnPedKilled(int is_footballer) {
                 }
                 if (found) gAch_footballer_total++;
             }
-            LOG_DEBUG("Not much of a sports fan: %d footballer peds on this map", gAch_footballer_total);
         }
         gAch_footballer_kills++;
-        LOG_DEBUG("Not much of a sports fan: %d/%d footballers killed", gAch_footballer_kills, gAch_footballer_total);
         if (gAch_footballer_total > 0 && gAch_footballer_kills >= gAch_footballer_total) {
             AchUnlock(ACHIEVEMENT_NOT_MUCH_OF_A_SPORTS_FAN);
         }
@@ -1761,11 +1759,6 @@ void Achievement_TriggerPopup(int idx) {
             gAch_popup_slots[j].dismiss_time = 0;
         }
     }
-}
-
-// Added by dethrace — trigger an in-race popup for a pseudo-random achievement (for testing).
-void Achievement_TriggerRandomPopup(void) {
-    Achievement_TriggerPopup((int)(PDGetTotalTime() >> 3) % ACHIEVEMENT_COUNT);
 }
 
 // Draw one popup slot at (px, py) with dissolve-in based on time since it was added.

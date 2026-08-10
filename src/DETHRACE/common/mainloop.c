@@ -631,17 +631,6 @@ tRace_result MainGameLoop(void) {
         if (!gAction_replay_mode) {
             MungeOpponents(gFrame_period);
             PollCarControls(gFrame_period);
-#if defined(DETHRACE_FIX_BUGS)
-            // Added by dethrace — horn key edge triggers a random achievement popup for testing
-            {
-                static int s_horn_prev = 0;
-                int horn_now = KeyIsDown(58);
-                if (horn_now && !s_horn_prev) {
-                    Achievement_TriggerRandomPopup();
-                }
-                s_horn_prev = horn_now;
-            }
-#endif
         }
         PollCameraControls(camera_period);
         if (!gAction_replay_mode) {
