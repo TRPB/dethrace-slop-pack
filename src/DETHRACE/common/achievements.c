@@ -38,11 +38,10 @@ static const tAchievement gAchievement_list[] = {
     { "Pinball Wizard", "Kill 5 pedestrians with the same object during pinball mode", 0, 0, eAchTrigger_ped_killed, NULL, "MAN.PIX|MANRUNA1.PIX" },
     { "Pacifist", "Win a race without killing any pedestrians yourself", 0, 0, eAchTrigger_race_won, NULL, "GRN.PIX|grntrn.pix" },
     { "Racist", "Win a race the boring way by collecting all the checkpoints", 0, 0, eAchTrigger_race_won, NULL, "CHECKPNT.PIX|CHECKPNT.PIX" },
-    { "Patient Zero", "Run over your very first pedestrian", 0, 0, eAchTrigger_ped_killed, NULL, "BUS.PIX|BUSRUNA1.PIX" },
+    { "Patient Zero", "Be the first to run over a pedestrian in a race", 0, 0, eAchTrigger_ped_killed, NULL, "BUS.PIX|BUSRUNA1.PIX" },
     { "Speed Bump", "Run over a pedestrian at under 5mph", 0, 0, eAchTrigger_ped_killed, NULL, "FAT.PIX|fattrn.pix" },
     { "Road Pizza", "Kill a pedestrian at over 150mph", 0, 0, eAchTrigger_ped_killed, NULL, "BIK.PIX|BIKRUNA1.PIX" },
     { "Lawn Mower", "Kill 20 pedestrians in a row without stopping", 0, 0, eAchTrigger_ped_killed, NULL, "BAT.PIX|battrn.pix" },
-    { "Bowling", "Kill 3 pedestrians with a single impact", 0, 0, eAchTrigger_ped_killed, NULL, "MUS.PIX|MUSSTL2.PIX" },
     { "Turkey", "Kill 3 pedestrians simultaneously", 0, 0, eAchTrigger_ped_killed, NULL, "CPT.PIX|CPTTRN.PIX" },
     { "Rampage", "Kill 10 pedestrians within 10 seconds", 0, 0, eAchTrigger_ped_killed, NULL, "PER.PIX|PERTRN.PIX" },
     { "Going Postal", "Kill 100 pedestrians in a single race", 0, 0, eAchTrigger_ped_killed, NULL, "CRM.PIX|crmtrn.pix" },
@@ -177,7 +176,7 @@ static int gAch_race_cow_kills;
 static int gAch_consecutive_player_kills;
 static tU32 gAch_last_player_kill_time;
 
-// Bowling / Turkey / Rampage: rolling kill timestamp window
+// Turkey / Rampage: rolling kill timestamp window
 #define kKillWindow_max 20
 static tU32 gAch_kill_times[kKillWindow_max];
 static int gAch_kill_count;
@@ -188,6 +187,9 @@ static int gAch_kill_head;
 typedef struct { void* actor; int count; } tAch_pinball_entry;
 static tAch_pinball_entry gAch_pinball_objects[kPinball_track_max];
 static int gAch_pinball_obj_count;
+
+// Patient Zero: player must be first killer in the race
+static int gAch_patient_zero_blocked; // set when an opponent kills a ped before the player
 
 // Not much of a sports fan: footballer peds present in this race
 static int gAch_footballer_total;
@@ -1301,6 +1303,9 @@ void Achievement_OnOpponentWasted(const char* pOpponent_name, int opponent_idx) 
 
 // Added by dethrace — called after Stats_OnPedKilled
 void Achievement_OnPedKilled(int is_footballer) {
+    if (gAch_race_player_peds_killed == 0) {
+        gAch_patient_zero_blocked = 1;
+    }
     if (is_footballer) {
         int i, s, f;
         if (gAch_footballer_total < 0) {
@@ -1408,6 +1413,8 @@ void Achievement_OnRaceStart(void) {
     memset(gAch_powerup_seen, 0, sizeof(gAch_powerup_seen));
     gAch_race_unique_powerups = 0;
 
+    gAch_patient_zero_blocked = 0;
+
     gAch_footballer_total = -1; // -1 = not yet counted (peds not loaded at race start)
     gAch_footballer_kills = 0;
 
@@ -1436,7 +1443,8 @@ void Achievement_OnPlayerPedKilled(float speed_mph, int is_cow, int is_billiards
     gAch_race_player_peds_killed++;
     {
         tU32 total = gGame_stats.total_peds_killed;
-        if (total >= 1) { AchUnlock(ACHIEVEMENT_HIT_N_RUN); AchUnlock(ACHIEVEMENT_PATIENT_ZERO); }
+        if (total >= 1) AchUnlock(ACHIEVEMENT_HIT_N_RUN);
+        if (gAch_race_player_peds_killed == 1 && !gAch_patient_zero_blocked) AchUnlock(ACHIEVEMENT_PATIENT_ZERO);
         if (total >= 100) AchUnlock(ACHIEVEMENT_MASSACRE);
         if (total >= 1000) AchUnlock(ACHIEVEMENT_IM_COMING_TO_GET_YOU);
         if (total >= 5000) AchUnlock(ACHIEVEMENT_PUBLIC_HEALTH_CRISIS);
@@ -1487,7 +1495,7 @@ void Achievement_OnPlayerPedKilled(float speed_mph, int is_cow, int is_billiards
     gAch_last_player_kill_time = now;
     if (gAch_consecutive_player_kills >= 20) AchUnlock(ACHIEVEMENT_LAWN_MOWER);
 
-    // Rolling kill window for Bowling / Turkey / Rampage
+    // Rolling kill window for Turkey / Rampage
     gAch_kill_times[gAch_kill_head] = now;
     gAch_kill_head = (gAch_kill_head + 1) % kKillWindow_max;
     if (gAch_kill_count < kKillWindow_max) gAch_kill_count++;
@@ -1496,15 +1504,13 @@ void Achievement_OnPlayerPedKilled(float speed_mph, int is_cow, int is_billiards
     for (i = 0; i < gAch_kill_count; i++) {
         if (now - gAch_kill_times[i] <= 500) n++;
     }
-    if (n >= 3) { AchUnlock(ACHIEVEMENT_BOWLING); AchUnlock(ACHIEVEMENT_TURKEY); }
+    if (n >= 3) AchUnlock(ACHIEVEMENT_TURKEY);
 
     n = 0;
     for (i = 0; i < gAch_kill_count; i++) {
         if (now - gAch_kill_times[i] <= 10000) n++;
     }
     if (n >= 10) AchUnlock(ACHIEVEMENT_RAMPAGE);
-
-    Achievement_OnPedKilled(is_footballer);
 
     // Zap: 50 kills during one electro bastard ray activation
     if (is_proximity_rayed) {
