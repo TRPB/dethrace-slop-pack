@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dethrace Slop Pack — modded Carmageddon 1 engine</title>
+<meta name="description" content="Dethrace Slop Pack: a personal mod fork of the Dethrace Carmageddon 1 reverse-engineered engine. Adds widescreen, MSAA, dynamic Meld (C1+Splat Pack+Xmas Demo in one campaign), achievements, bug fixes, and more.">
+<meta property="og:title" content="Dethrace Slop Pack">
+<meta property="og:description" content="Modded Carmageddon 1 engine — widescreen, MSAA, dynamic Meld, achievements, and 1997-era bug fixes.">
+<meta property="og:type" content="website">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --green: #ff3333;
+    --green-dim: #8c1a1a;
+    --green-bright: #ff9999;
+    --amber: #ffb000;
+    --bg: #0a0000;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--green);
+    font-family: 'Share Tech Mono', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* CRT scanlines */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 2px,
+      rgba(0,0,0,0.18) 2px,
+      rgba(0,0,0,0.18) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* CRT vignette */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.6) 100%);
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  .container {
+    max-width: 80ch;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* ── HEADER / ASCII ART ── */
+  .ascii-art {
+    white-space: pre;
+    font-size: 11px;
+    line-height: 1.2;
+    overflow-x: auto;
+    margin-bottom: 0;
+  }
+
+  .ascii-dethrace {
+    color: var(--green-bright);
+    text-shadow: 0 0 8px var(--green);
+  }
+
+  .ascii-slop {
+    color: var(--amber);
+    text-shadow: 0 0 10px var(--amber);
+    margin-bottom: 1rem;
+  }
+
+  .seo-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+  }
+
+  .tagline {
+    color: var(--amber);
+    text-shadow: 0 0 8px var(--amber);
+    margin-bottom: 0.25rem;
+  }
+
+  .version-bar {
+    border-top: 1px solid var(--green-dim);
+    border-bottom: 1px solid var(--green-dim);
+    padding: 0.25rem 0;
+    margin-bottom: 2rem;
+    color: var(--green-dim);
+  }
+
+  /* ── SECTION HEADERS ── */
+  h2 {
+    color: var(--amber);
+    text-shadow: 0 0 6px var(--amber);
+    margin: 2rem 0 0.75rem;
+    font-size: 1rem;
+    font-weight: normal;
+    text-transform: uppercase;
+  }
+
+  h2::before { content: '▌ '; }
+
+  /* ── FEATURE LISTS ── */
+  .feature-group { margin-bottom: 1.5rem; }
+
+  .feature-group h3 {
+    color: var(--green-bright);
+    font-size: 0.9rem;
+    font-weight: normal;
+    margin-bottom: 0.4rem;
+  }
+
+  .feature-group h3::before { content: '  ┌─ '; }
+
+  ul {
+    list-style: none;
+    padding-left: 0;
+  }
+
+  ul li {
+    padding-left: 2ch;
+    color: var(--green);
+  }
+
+  ul li::before {
+    content: '├ ';
+    color: var(--green-dim);
+  }
+
+  ul li:last-child::before { content: '└ '; }
+
+  /* ── SCREENSHOTS ── */
+  .screenshots {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin: 1rem 0;
+  }
+
+  .screenshots img {
+    width: 100%;
+    border: 1px solid var(--green-dim);
+    filter: saturate(0.9) brightness(0.95);
+    display: block;
+  }
+
+  .screenshots img:hover {
+    border-color: var(--green);
+    filter: saturate(1.1) brightness(1.05);
+    box-shadow: 0 0 12px var(--green-dim);
+  }
+
+  .achievements {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin: 1rem 0;
+  }
+
+  .achievements img {
+    width: 100%;
+    border: 1px solid var(--green-dim);
+    display: block;
+  }
+
+  /* ── CODE / INI BLOCKS ── */
+  pre {
+    background: #120000;
+    border: 1px solid var(--green-dim);
+    border-left: 3px solid var(--green);
+    padding: 0.75rem 1rem;
+    overflow-x: auto;
+    margin: 0.75rem 0;
+    color: var(--green-bright);
+    font-size: 12px;
+  }
+
+  code {
+    color: var(--green-bright);
+    background: #120000;
+    padding: 0 0.3em;
+  }
+
+  /* ── LINKS ── */
+  a {
+    color: var(--amber);
+    text-decoration: none;
+    text-shadow: 0 0 4px var(--amber);
+  }
+
+  a:hover {
+    color: var(--green-bright);
+    text-shadow: 0 0 8px var(--green);
+  }
+
+  /* ── PROMPT CURSOR ── */
+  .prompt {
+    color: var(--green-dim);
+    margin-top: 3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5ch;
+  }
+
+  .cursor {
+    display: inline-block;
+    width: 0.6em;
+    height: 1.1em;
+    background: var(--green);
+    animation: blink 1s step-end infinite;
+    vertical-align: text-bottom;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--green-dim);
+    margin: 1.5rem 0;
+  }
+
+  .note {
+    color: var(--green-dim);
+    font-size: 12px;
+  }
+
+  @media (max-width: 600px) {
+    .ascii-art { font-size: 7px; }
+    .screenshots, .achievements { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1 class="seo-title"><a href="https://github.com/TRPB/dethrace">Dethrace Slop Pack</a> — modded Carmageddon 1 engine</h1>
+
+<pre class="ascii-art"><span class="ascii-dethrace">
+ ██████╗ ███████╗████████╗██╗  ██╗██████╗  █████╗  ██████╗███████╗
+ ██╔══██╗██╔════╝╚══██╔══╝██║  ██║██╔══██╗██╔══██╗██╔════╝██╔════╝
+ ██║  ██║█████╗     ██║   ███████║██████╔╝███████║██║     █████╗
+ ██║  ██║██╔══╝     ██║   ██╔══██║██╔══██╗██╔══██║██║     ██╔══╝
+ ██████╔╝███████╗   ██║   ██║  ██║██║  ██║██║  ██║╚██████╗███████╗
+ ╚═════╝ ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚══════╝</span>
+<span class="ascii-slop">███████╗██╗      ██████╗ ██████╗     ██████╗  █████╗  ██████╗██╗  ██╗
+██╔════╝██║     ██╔═══██╗██╔══██╗    ██╔══██╗██╔══██╗██╔════╝██║ ██╔╝
+███████╗██║     ██║   ██║██████╔╝    ██████╔╝███████║██║     █████╔╝
+╚════██║██║     ██║   ██║██╔═══╝     ██╔═══╝ ██╔══██║██║     ██╔═██╗
+███████║███████╗╚██████╔╝██║         ██║     ██║  ██║╚██████╗██║  ██╗
+╚══════╝╚══════╝ ╚═════╝ ╚═╝         ╚═╝     ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝</span></pre>
+
+<p class="tagline">:: 30 years later, the game 12 year old me always wanted ::</p>
+<p class="version-bar">C:\GAMES\CARMAGEDDON\&gt; dethrace.exe&nbsp;&nbsp;&nbsp;[Build: 2026]&nbsp;&nbsp;&nbsp;Platform: Linux/Windows/Mac</p>
+
+<p>
+  <a href="https://github.com/TRPB/dethrace">Dethrace Slop Pack</a> is a personal mod fork of
+  <a href="https://github.com/dethrace-labs/dethrace">Dethrace</a>,
+  the reverse-engineered Carmageddon 1 engine. Adds a pile of features, bug fixes, and
+  the <strong>Meld</strong> system — merging C1, Splat Pack, and Xmas Demo into one
+  unified campaign at runtime, no file copying needed.
+</p>
+
+<p class="note" style="margin-top:0.5rem;">
+  Not intended for upstream contribution. This is AI-assisted and heavily personalised.
+  Upstream devs are welcome to anything useful.
+</p>
+
+<hr class="divider">
+
+<h2>Screenshots</h2>
+
+<div class="screenshots">
+  <a href="screenshot1.png"><img src="screenshot1.png" alt="In-game screenshot 1"></a>
+  <a href="screenshot2.png"><img src="screenshot2.png" alt="In-game screenshot 2"></a>
+</div>
+
+<div class="achievements">
+  <a href="achievement01.jpg"><img src="achievement01.jpg" alt="Achievement unlocked"></a>
+  <a href="achievement02.jpg"><img src="achievement02.jpg" alt="Achievement unlocked"></a>
+</div>
+
+<hr class="divider">
+
+<h2>Features</h2>
+
+<div class="feature-group">
+  <h3>Graphics</h3>
+  <ul>
+    <li>Custom resolution + widescreen support (3dfx mode)</li>
+    <li>Widescreen 2D cockpits (21:9, if present via Meld)</li>
+    <li>MSAA &amp; Sample Rate Shading / supersampling</li>
+    <li>Vastly extended draw distance — geometry, opponents, peds, powerups</li>
+    <li>Opponent LOD always max, view distance 10×</li>
+    <li>Configurable skid/blood/oil decal limits — last the whole race</li>
+    <li>Decals no longer hover above ground</li>
+  </ul>
+</div>
+
+<div class="feature-group">
+  <h3>Gameplay</h3>
+  <ul>
+    <li>Achievements system</li>
+    <li>Dynamic Meld — C1 + Splat Pack + Xmas Demo in one campaign</li>
+    <li>Multiplayer arena tracks (SUMO, COLISEUM) added to campaign</li>
+    <li>Opponent player character added as a campaign racer</li>
+    <li>Configurable car stealing (any car, probability, rank gate off)</li>
+  </ul>
+</div>
+
+<div class="feature-group">
+  <h3>Quality of Life</h3>
+  <ul>
+    <li>Loads cutscenes direct from GAME.GOG / SPLAT.GOG — no manual extraction</li>
+    <li>Easier modding hooks</li>
+  </ul>
+</div>
+
+<div class="feature-group">
+  <h3>Bug Fixes</h3>
+  <ul>
+    <li>Camera judder on slopes — fixed since 1997!</li>
+    <li>Pedestrian spasm/flicker — fixed since 1997!</li>
+    <li>3dfx fog tint, z-fighting at high draw distance, texture zoom</li>
+    <li>Submersion physics, opponent splash sounds, car shadow flicker</li>
+    <li>Sky black band via GL_DEPTH_CLAMP</li>
+    <li>ProcessGetNearPlayer + ReverseSound crash fixes</li>
+  </ul>
+</div>
+
+<hr class="divider">
+
+<h2>Install</h2>
+
+<p>Same as upstream Dethrace. Build from source or grab a release binary.</p>
+<p>For arena race cards (MeldNetRaces), copy the bundled <code>DATA/</code> folder next to the executable.</p>
+
+<h2>Configuration</h2>
+
+<p>All options live under <code>[Slop]</code> in <code>dethrace.ini</code>:</p>
+
+<pre>[Slop]
+Meld                    = 1       ; merge all [Games] installs into one campaign
+MeldBothStartingCars    = 1       ; start with both variants of your car
+MeldNetRaces            = 1       ; add SUMO + COLISEUM to the campaign
+
+Achievements            = 1
+
+Width                   = 3840    ; custom resolution
+Height                  = 2160
+Msaa                    = 8       ; 0 / 2 / 4 / 8
+SampleRateShading       = 1       ; MSAA → SSAA
+
+CameraJudderFix         = 1
+ExtendDrawDistance      = 1
+FixPedSpasm             = 1
+
+StealworthyAllCars      = 1
+StealworthyPercentage   = 50
+StealworthyRankLimitDisable = 1
+
+NumSkids                = 65535   ; max decals (default 100)</pre>
+
+<p>Game directories for Meld go under <code>[Games]</code>:</p>
+<pre>[Games]
+Game1 = /path/to/CARMAGEDDON
+Game2 = /path/to/SPLAT_PACK
+Game3 = /path/to/XMAS_DEMO</pre>
+
+<hr class="divider">
+
+<h2>Build</h2>
+
+<p>Install dependencies:</p>
+<pre># macOS
+brew install SDL2 cmake
+
+# Linux
+apt-get install libsdl2-dev cmake</pre>
+
+<p>Clone and build:</p>
+<pre>git clone https://github.com/TRPB/dethrace
+cd dethrace
+git submodule update --init --recursive
+mkdir build
+cd build
+cmake ..
+make</pre>
+
+<h2>Links</h2>
+
+<ul>
+  <li><a href="https://github.com/dethrace-labs/dethrace">Upstream Dethrace project</a></li>
+  <li><a href="CHANGELOG.md">Changelog</a></li>
+  <li><a href="CONFIGURATION.md">Full configuration docs</a></li>
+  <li><a href="RENDERING_PIPELINE.md">Rendering pipeline docs</a></li>
+  <li><a href="TROUBLESHOOTING.md">Troubleshooting</a></li>
+  <li><a href="PORTING.md">Porting guide</a></li>
+</ul>
+
+<div class="prompt">C:\GAMES\CARMAGEDDON\&gt;&nbsp;<span class="cursor"></span></div>
+
+</div>
+</body>
+</html>
