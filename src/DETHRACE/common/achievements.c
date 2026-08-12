@@ -66,7 +66,7 @@ static const tAchievement gAchievement_list[] = {
     { "Collector", "Acquire every opponent's car", 0, 0, eAchTrigger_none, NULL, "IVAN.PIX|vsus.pix" },
     { "Test Drive", "Complete a race using 10 different cars", 0, 0, eAchTrigger_race_won, NULL, "MERC.PIX|mcwing.pix" },
     { "Frequent Flyer", "Keep your car airborne for 5 seconds", 0, 0, eAchTrigger_none, NULL, "STUNT.PIX|CCROAD.PIX" },
-    { "High Flyer", "Launch off a ramp and land without taking damage", 0, 0, eAchTrigger_none, NULL, "ARENA.PIX|CRATEND.PIX" },
+    { "High Flyer", "Fall at least 25m off a ramp and land without taking damage", 0, 0, eAchTrigger_none, NULL, "ARENA.PIX|CRATEND.PIX" },
     { "Close Shave", "Pass within 1m of a pedestrian at over 100mph without hitting them", 0, 0, eAchTrigger_none, NULL, "CAM.PIX|CAMTRN.PIX" },
     { "Skid Mark", "Perform a continuous skid for more than 100m", 0, 0, eAchTrigger_none, NULL, "GIBSMEAR.PIX|gibsmear.pix" },
     { "Insurance Nightmare", "Accumulate 1,000,000 credits in total repair costs", 0, 0, eAchTrigger_none, NULL, "FRANK.FLI" },
@@ -222,12 +222,13 @@ static tU32 gAch_mine_flag_time;
 // Frequent Flyer: continuous airborne time
 static tU32 gAch_airborne_ms;
 
-// High Flyer: liftoff damage snapshot and airborne start time
-#define kHighFlyer_min_air_ms 500
+// High Flyer: liftoff damage snapshot and peak height reached while airborne
+#define kHighFlyer_min_fall_m 25.0f
 static int gAch_prev_wheels_on_ground;
 static int gAch_confirmed_on_ground; // must touch ground before liftoff tracking starts
 static int gAch_liftoff_damage;
 static tU32 gAch_liftoff_ms;
+static float gAch_peak_height_m;
 
 // Skid Mark: continuous skid distance in metres
 static float gAch_skid_distance_m;
@@ -1617,16 +1618,23 @@ void Achievement_OnPlayerCarFrame(tCar_spec* pCar) {
         gAch_airborne_ms = 0;
     }
 
-    // High Flyer: launch and land without taking damage, min 500ms in air
+    // High Flyer: launch and land without taking damage, having fallen at least
+    // kHighFlyer_min_fall_m from the peak height reached during the flight
     if (!airborne) gAch_confirmed_on_ground = 1;
     if (airborne && gAch_prev_wheels_on_ground > 0 && gAch_confirmed_on_ground) {
-        // just left the ground — snapshot current total damage
+        // just left the ground — snapshot current total damage and starting height
         gAch_liftoff_damage = 0;
         for (i = 0; i < 12; i++) gAch_liftoff_damage += pCar->damage_units[i].damage_level;
         gAch_liftoff_ms = PDGetTotalTime();
+        gAch_peak_height_m = pCar->car_master_actor->t.t.translate.t.v[1];
+    } else if (airborne && gAch_liftoff_ms != 0) {
+        // track the highest point reached during this flight
+        if (pCar->car_master_actor->t.t.translate.t.v[1] > gAch_peak_height_m) {
+            gAch_peak_height_m = pCar->car_master_actor->t.t.translate.t.v[1];
+        }
     } else if (!airborne && gAch_prev_wheels_on_ground == 0 && gAch_liftoff_ms != 0) {
-        // just touched down — check if we were airborne long enough and took no damage
-        if (PDGetTotalTime() - gAch_liftoff_ms >= kHighFlyer_min_air_ms) {
+        // just touched down — check if we fell far enough from the peak and took no damage
+        if (gAch_peak_height_m - pCar->car_master_actor->t.t.translate.t.v[1] >= kHighFlyer_min_fall_m) {
             total_damage = 0;
             for (i = 0; i < 12; i++) total_damage += pCar->damage_units[i].damage_level;
             if (total_damage <= gAch_liftoff_damage) AchUnlock(ACHIEVEMENT_HIGH_FLYER);
