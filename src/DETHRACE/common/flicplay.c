@@ -387,7 +387,11 @@ tFlic_spec gMain_flic_list[372] = {
     { "MAI2NNFL.FLI", 0, 0, 0, 0, 0, 0, NULL, 0u },
     { "MAI2NNGL.FLI", 0, 0, 0, 0, 0, 0, NULL, 0u },
     { "MAI2OPFL.FLI", 0, 0, 0, 0, 0, 0, NULL, 0u },
-    { "MAI2OPGL.FLI", 0, 0, 0, 0, 0, 0, NULL, 0u }
+    { "MAI2OPGL.FLI", 0, 0, 0, 0, 0, 0, NULL, 0u },
+    // Added by dethrace — Achievements pause-menu button, substituted into the
+    // Recover slot when recovery isn't available (see StartMainMenu)
+    { "MAINACHFL.FLI", 0, 0, 0, 0, 0, 0, NULL, 0u }, // index 340
+    { "MAINACHGL.FLI", 0, 0, 0, 0, 0, 0, NULL, 0u }  // index 341
 };
 
 // GLOBAL: CARM95 0x00518420

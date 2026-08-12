@@ -258,6 +258,15 @@ static tU8 gAch_popup_save_buf[kPopup_save_max_w * kPopup_save_max_h * 2];
 static tU8 gAch_rgb5_to_rend[32 * 32 * 32];
 static int gAch_rend_table_built = 0;
 
+// Added by dethrace — build guards for the menu-palette remap tables below.
+// These are expensive nearest-colour searches (the RGB5 one alone is a
+// 32*32*32 table), so they're built lazily on first actual use rather than
+// eagerly when the achievements screen opens. Building them eagerly stalled
+// the frame loop right as the screen's opening flic animation started,
+// making the animation itself stutter.
+static int gAch_flc_remap_built = 0;
+static int gAch_rgb5_flic_built = 0;
+
 static void AchSavePanel(tU8* buf) {
     int y;
     for (y = 0; y < gAch_panel_h; y++) {
@@ -294,10 +303,15 @@ static void AchApplyDissolve(void) {
 }
 
 // Build nearest-colour remap from gRender_palette indices to gFlic_palette indices.
+// Added by dethrace — self-guarding: built once, lazily, on first actual use.
 static void AchBuildRend2FlcRemap(void) {
-    const tU8* rp = (const tU8*)gRender_palette->pixels;
-    const tU8* fp = (const tU8*)gFlic_palette->pixels;
+    const tU8* rp;
+    const tU8* fp;
     int i, j;
+    if (gAch_flc_remap_built) return;
+    gAch_flc_remap_built = 1;
+    rp = (const tU8*)gRender_palette->pixels;
+    fp = (const tU8*)gFlic_palette->pixels;
     gAch_rend2flc[0] = 0;
     for (i = 1; i < 256; i++) {
         int ri = rp[i * 4], gi = rp[i * 4 + 1], bi = rp[i * 4 + 2];
@@ -316,9 +330,13 @@ static void AchBuildRend2FlcRemap(void) {
 }
 
 // Build 5-bit-per-channel RGB → flic palette index table for bilinear quantisation.
+// Added by dethrace — self-guarding: built once, lazily, on first actual use.
 static void AchBuildRgbToFlicTable(void) {
-    const tU8* fp = (const tU8*)gFlic_palette->pixels;
+    const tU8* fp;
     int r, g, b, i;
+    if (gAch_rgb5_flic_built) return;
+    gAch_rgb5_flic_built = 1;
+    fp = (const tU8*)gFlic_palette->pixels;
     for (r = 0; r < 32; r++) {
         for (g = 0; g < 32; g++) {
             for (b = 0; b < 32; b++) {
@@ -377,6 +395,12 @@ static void AchBlitScaled(br_pixelmap* src, int sx, int sy, int sw, int sh,
     tU8* src_pixels = (tU8*)src->pixels;
     tU8* dst_pixels = (tU8*)dst->pixels;
     int x, y;
+
+    // Added by dethrace — lazy-build on first actual use (see build guards above).
+    AchBuildRgbToFlicTable();
+    if (remap != NULL) {
+        AchBuildRend2FlcRemap();
+    }
 
     for (y = 0; y < dh; y++) {
         int fy = (dh > 1) ? (y * (sh - 1) * 256 / (dh - 1)) : 0;
@@ -1705,16 +1729,33 @@ void DoViewAchievements(void) {
         COUNT_OF(mouse_areas), mouse_areas, 0, NULL
     };
 
+    int was_playing_from_disk; // Added by dethrace
+
     gCurrent_achievement_index = -1;
     gAch_mugshot_opponent = -1;
     gAch_dissolve_start = -1;
     BuildColourTable(gRender_palette);
     gStart_interface_spec = &interface_spec;
 
-    // Build once: remap from gRender_palette indices (used by pedestrian PIX sprites) to
-    // the nearest colour in gFlic_palette (the menu display palette).
-    AchBuildRend2FlcRemap();
-    AchBuildRgbToFlicTable();
+    // The gRender_palette -> gFlic_palette remap tables used to be built here,
+    // eagerly, before the screen's opening flic played. They're a nearest-colour
+    // search over a 32*32*32 table and stalled the frame loop right as the
+    // animation started, making it stutter. They're now built lazily on first
+    // actual use (see AchBlitScaled), which happens after the opening flic has
+    // already finished playing.
+
+    // Added by dethrace — the in-race pause menu enters "play from disk" mode
+    // (PlayFlicsFromDisk) to keep memory down while a race is loaded: flic
+    // frames get streamed off disk during playback instead of preloaded, and
+    // LoadFlicData becomes a no-op. This screen's mugshot compositing
+    // (AchLoadPlayerPortrait, AchBlitScaled) needs the whole FLI decoded in
+    // memory, and streaming the opening flic frame-by-frame off disk was also
+    // what caused the stutter. Force memory mode for this screen and restore
+    // whatever mode was active on the way out.
+    was_playing_from_disk = FlicsPlayedFromDisk();
+    if (was_playing_from_disk) {
+        PlayFlicsFromMemory();
+    }
 
     // Panel slot 0 used for opponent mug shots; sized to hold the full dare-screen FLI
     InitialiseFlicPanel(0,
@@ -1727,6 +1768,10 @@ void DoViewAchievements(void) {
 
     DisposeFlicPanel(0);
     AchClearPedImage();
+
+    if (was_playing_from_disk) { // Added by dethrace
+        PlayFlicsFromDisk();
+    }
 }
 
 // Added by dethrace — trigger an in-race achievement popup for a specific achievement index.

@@ -1,4 +1,5 @@
 #include "mainmenu.h"
+#include "achievements.h"
 #include "brender.h"
 #include "controls.h"
 #include "flicplay.h"
@@ -39,6 +40,48 @@ int gReplace_background;
 
 // GLOBAL: CARM95 0x00536258
 char* gPixels_copy__mainmenu; // suffix added to avoid duplicate symbol
+
+#if defined(DETHRACE_FIX_BUGS)
+// Added by dethrace — pause-menu "Recover" slot flic indices, and the
+// Achievements flics substituted into that slot when recovery isn't available.
+#define kFlic_MainRecoverFL 24
+#define kFlic_MainRecoverGL 25
+#define kFlic_MainAchFL 340
+#define kFlic_MainAchGL 341
+
+// Added by dethrace — whether the pause menu's slot 1 currently reads
+// "Achievements" (1) or "Recover Car And Continue" (0). Consumed by DoMainMenu
+// to decide what eMM_recover should actually do.
+static int gAch_menu_slot_is_achievements;
+
+// Added by dethrace — checked once: are the Achievements button flics present
+// on disk? Keeps this feature optional so a missing asset can't hard-crash
+// LoadFlic's FatalError path.
+static int AchievementMenuFlicsAvailable(void) {
+    static int checked = 0;
+    static int available = 0;
+    tPath_name the_path;
+    FILE* f;
+
+    if (!checked) {
+        checked = 1;
+        PathCat(the_path, gApplication_path, "ANIM");
+        PathCat(the_path, the_path, "MAINACHFL.FLI");
+        f = DRfopen(the_path, "rb");
+        if (f != NULL) {
+            fclose(f);
+            PathCat(the_path, gApplication_path, "ANIM");
+            PathCat(the_path, the_path, "MAINACHGL.FLI");
+            f = DRfopen(the_path, "rb");
+            if (f != NULL) {
+                fclose(f);
+                available = 1;
+            }
+        }
+    }
+    return available;
+}
+#endif
 
 // IDA: int __usercall MainMenuDone1@<EAX>(int pCurrent_choice@<EAX>, int pCurrent_mode@<EDX>, int pGo_ahead@<EBX>, int pEscaped@<ECX>, int pTimed_out)
 // FUNCTION: CARM95 0x0044ae90
@@ -141,6 +184,31 @@ void StartMainMenu(void) {
     }
     DontLetFlicFuckWithPalettes();
     TurnFlicTransparencyOn();
+#if defined(DETHRACE_FIX_BUGS)
+    // When Recover isn't available, repurpose its slot for Achievements
+    // instead of just greying it out, provided the feature is switched on
+    // and its button graphics are actually present on disk.
+    gAch_menu_slot_is_achievements = 0;
+    if (!gProgram_state.racing && harness_game_config.achievements && AchievementMenuFlicsAvailable()) {
+        gAch_menu_slot_is_achievements = 1;
+        gMain_menu_spec->flicker_on_flics[1].flic_index = kFlic_MainAchGL;
+        gMain_menu_spec->flicker_off_flics[1].flic_index = kFlic_MainAchFL;
+        RunFlicAt(
+            kFlic_MainAchFL,
+            gMain_menu_spec->flicker_off_flics[1].x[gGraf_data_index],
+            gMain_menu_spec->flicker_off_flics[1].y[gGraf_data_index]);
+    } else {
+        gMain_menu_spec->flicker_on_flics[1].flic_index = kFlic_MainRecoverGL;
+        gMain_menu_spec->flicker_off_flics[1].flic_index = kFlic_MainRecoverFL;
+        if (!gProgram_state.racing) {
+            DisableChoice(1);
+            RunFlicAt(
+                35,
+                gMain_menu_spec->flicker_on_flics[1].x[gGraf_data_index],
+                gMain_menu_spec->flicker_on_flics[1].y[gGraf_data_index]);
+        }
+    }
+#else
     if (!gProgram_state.racing) {
         DisableChoice(1);
         RunFlicAt(
@@ -148,6 +216,7 @@ void StartMainMenu(void) {
             gMain_menu_spec->flicker_on_flics[1].x[gGraf_data_index],
             gMain_menu_spec->flicker_on_flics[1].y[gGraf_data_index]);
     }
+#endif
     if (gDisallow_abandon_race) {
         DisableChoice(2);
         RunFlicAt(
@@ -347,7 +416,18 @@ int DoMainMenuInterface(tU32 pTime_out, int pContinue_allowed) {
     if (pContinue_allowed) {
         gMain_menu_spec = &interface_spec1;
         result = DoInterfaceScreen(&interface_spec1, gFaded_palette | 2, 0);
+#if defined(DETHRACE_FIX_BUGS)
+        // Slot 1 fades to black here because it's normally "Recover" (masking
+        // the car teleport). When it's substituted for Achievements, there's
+        // nothing to mask and DoViewAchievements() has no fade-back-up logic
+        // of its own — the fade would just sit until EnsurePaletteUp() pays it
+        // back mid-animation on the opening flic's next frame, showing up as a
+        // ~500ms stall partway through. Treat it like Options/Load/Save
+        // instead: no fade, straight transition.
+        if (result == 7 || result == 0 || (result == 1 && !gAch_menu_slot_is_achievements) || result == 2) {
+#else
         if (result == 7 || result == 0 || result == 1 || result == 2) {
+#endif
             FadePaletteDown();
         } else {
             RunFlic(12);
@@ -644,7 +724,14 @@ tMM_result DoMainMenu(tU32 pTime_out, int pSave_allowed, int pContinue_allowed) 
         gAbandon_game = 1;
         break;
     case eMM_recover:
-        SetRecovery();
+#if defined(DETHRACE_FIX_BUGS)
+        if (gAch_menu_slot_is_achievements) {
+            DoViewAchievements();
+        } else
+#endif
+        {
+            SetRecovery();
+        }
         break;
     }
     return the_result;
