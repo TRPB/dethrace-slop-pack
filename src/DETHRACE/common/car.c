@@ -179,8 +179,6 @@ static br_scalar gCamera_prev_car_x;
 static br_scalar gCamera_prev_car_z;
 static int gCamera_smooth_look;
 static int gCamera_smooth_look_valid;
-static int gCamera_prev_wheels_on_ground;
-static br_scalar gCamera_prev_pos_y;
 #endif
 
 // GLOBAL: CARM95 0x00514da8
@@ -5733,32 +5731,9 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
                 gCamera_smooth_lat_vel = 0.0f;
                 gCamera_prev_car_x = c->pos.v[0];
                 gCamera_prev_car_z = c->pos.v[2];
-                gCamera_prev_wheels_on_ground = c->number_of_wheels_on_ground;
-                gCamera_prev_pos_y = c->pos.v[1];
                 gCamera_smooth_look_valid = 1;
             } else {
                 br_scalar lag;
-                // When landing from a fall, smooth_lag_y has accumulated a large
-                // negative value. At the bounce-up it makes aim_y go well below pos,
-                // compounding with suspension compression to clip the body through the
-                // road. Detect two landing cases and re-seed the EMAs at the real
-                // position so the lag tracking starts fresh.
-                //
-                // Case 1: wheels first — wheels transition from airborne to ground.
-                if (gCamera_prev_wheels_on_ground == 0 && c->number_of_wheels_on_ground > 0) {
-                    gCamera_smooth_look_y = c->pos.v[1];
-                    gCamera_smooth_lag_y = 0.0f;
-                }
-                gCamera_prev_wheels_on_ground = c->number_of_wheels_on_ground;
-                // Case 2: side/roof landing — wheels stay airborne but pos.v[1]
-                // reverses upward while smooth_lag_y is still negative from the fall.
-                // On ramps this may fire on high-wobble frames but the only effect is
-                // one frame of slightly incorrect camera height (not judder).
-                if (c->pos.v[1] > gCamera_prev_pos_y && gCamera_smooth_lag_y < 0.0f) {
-                    gCamera_smooth_look_y = c->pos.v[1];
-                    gCamera_smooth_lag_y = 0.0f;
-                }
-                gCamera_prev_pos_y = c->pos.v[1];
                 gCamera_smooth_look_y = (gCamera_smooth_look_y + smooth_rate * c->pos.v[1]) / (smooth_rate + 1.0f);
                 gCamera_smooth_dir_y = (gCamera_smooth_dir_y + smooth_rate * c->direction.v[1]) / (smooth_rate + 1.0f);
                 // The smoothed look Y lags the true Y on climbs. Track that lag
