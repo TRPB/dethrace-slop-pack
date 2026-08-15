@@ -5,6 +5,9 @@
 #ifndef HARNESS_MELD_INTERNAL_H
 #define HARNESS_MELD_INTERNAL_H
 
+#include "harness/cue.h"
+#include "harness/iso.h"
+
 #include <stddef.h>
 #include <stdio.h>
 
@@ -88,6 +91,13 @@ extern char       s_race_map_pix[MELD_MAX_RACES][MELD_MAP_PIX_LEN];
 extern int        s_race_has_scene_fli[MELD_MAX_RACES];
 extern int        s_game_method[MELD_MAX_GAMES];
 extern int        s_current_race_index;
+// Per-game ISO backing: NULL if game_dirs[i].directory is a plain directory,
+// else an open image when the [Games] entry names a bare ISO9660/BIN file or
+// a .cue sheet (e.g. a ripped CD-ROM image). Populated by Meld_Init().
+extern tIso_image* s_iso_backing[MELD_MAX_GAMES];
+// Parsed cue sheet for game dirs backed by a .cue (for CD-audio track
+// access); NULL for plain directories and bare-image-backed game dirs.
+extern tCue_sheet* s_cue_backing[MELD_MAX_GAMES];
 
 // ---------------------------------------------------------------------------
 // Shared helpers — defined in meld.c (non-static), used in meld_netraces.c
@@ -95,6 +105,15 @@ extern int        s_current_race_index;
 
 void  meld_join(char* dest, size_t len, const char* a, const char* b);
 FILE* meld_open_data(int game_idx, const char* name, const char* mode);
+// Open rel_path (e.g. "DATA/CARS/POLICE.TXT") under game_dirs[game_idx]:
+// resolves inside s_iso_backing[game_idx] if that game dir is ISO-backed,
+// else joins with game_dirs[game_idx].directory and opens on disk as before.
+// ISO images are read-only media: any write-mode request returns NULL.
+FILE* meld_dir_fopen(int game_idx, const char* rel_path, const char* mode);
+// Directory-listing cursor mirroring OS_GetFirstFileInDirectory /
+// OS_GetNextFileInDirectory, but ISO-aware for image-backed game dirs.
+const char* meld_dir_first_file(int game_idx, const char* rel_subdir);
+const char* meld_dir_next_file(void);
 int   meld_detect_method(int game_idx);
 int   meld_read_one_race(FILE* f, int method, tMeld_race* r);
 void  mbuf_init(tMeld_buf* b);

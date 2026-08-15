@@ -4,6 +4,7 @@
 #include "include/harness/config.h"
 #include "include/harness/gog.h"
 #include "include/harness/hooks.h"
+#include "include/harness/cue.h"
 #include "include/harness/meld.h"
 #include "include/harness/os.h"
 #include "ini.h"
@@ -135,15 +136,15 @@ static void Harness_DetectGameMode(void) {
     char* buffer;
     int nb;
 
-    if (access("DATA/RACES/CASTLE.TXT", F_OK) != -1) {
+    if (Cue_AccessSingle("DATA/RACES/CASTLE.TXT") != -1) {
         // All splatpack edition have the castle track
-        if (access("DATA/RACES/CASTLE2.TXT", F_OK) != -1) {
+        if (Cue_AccessSingle("DATA/RACES/CASTLE2.TXT") != -1) {
             // Only the full splat release has the castle2 track
             harness_game_info.defines.INTRO_SMK_FILE = "MIX_INTR.SMK";
             harness_game_info.defines.GERMAN_LOADSCRN = "LOADSCRN.PIX";
             harness_game_info.mode = eGame_splatpack;
             printf("Game mode: Splat Pack\n");
-        } else if (access("DATA/RACES/TINSEL.TXT", F_OK) != -1) {
+        } else if (Cue_AccessSingle("DATA/RACES/TINSEL.TXT") != -1) {
             // Only the the splat x-mas demo has the tinsel track
             harness_game_info.defines.INTRO_SMK_FILE = "MIX_INTR.SMK";
             harness_game_info.defines.GERMAN_LOADSCRN = "";
@@ -156,9 +157,9 @@ static void Harness_DetectGameMode(void) {
             harness_game_info.mode = eGame_splatpack_demo;
             printf("Game mode: Splat Pack demo\n");
         }
-    } else if (access("DATA/RACES/CITYB3.TXT", F_OK) != -1) {
+    } else if (Cue_AccessSingle("DATA/RACES/CITYB3.TXT") != -1) {
         // All non-splatpack edition have the cityb3 track
-        if (access("DATA/RACES/CITYA1.TXT", F_OK) == -1) {
+        if (Cue_AccessSingle("DATA/RACES/CITYA1.TXT") == -1) {
             // The demo does not have the citya1 track
             harness_game_info.defines.INTRO_SMK_FILE = "";
             harness_game_info.defines.GERMAN_LOADSCRN = "COWLESS.PIX";
@@ -169,7 +170,7 @@ static void Harness_DetectGameMode(void) {
         }
     } else {
     carmageddon:
-        if (access("DATA/CUTSCENE/Mix_intr.smk", F_OK) == -1) {
+        if (Cue_AccessSingle("DATA/CUTSCENE/Mix_intr.smk") == -1) {
             harness_game_info.defines.INTRO_SMK_FILE = "Mix_intr.smk";
         } else {
             harness_game_info.defines.INTRO_SMK_FILE = "MIX_INTR.SMK";
@@ -180,8 +181,11 @@ static void Harness_DetectGameMode(void) {
     }
 
     harness_game_info.localization = eGameLocalization_none;
-    if (access("DATA/TRNSLATE.TXT", F_OK) != -1) {
+    if (Cue_AccessSingle("DATA/TRNSLATE.TXT") != -1) {
         f = fopen("DATA/TRNSLATE.TXT", "rb");
+        if (f == NULL) {
+            f = Cue_FopenSingle("DATA/TRNSLATE.TXT", "rb");
+        }
         fseek(f, 0, SEEK_END);
         filesize = ftell(f);
         fseek(f, 0, SEEK_SET);
@@ -264,9 +268,19 @@ void Harness_DetectAndSetWorkingDirectory(char* argv0) {
 
     // if root_dir is null or empty, no need to chdir
     if (path != NULL && path[0] != '\0') {
-        printf("Using game directory: %s\n", path);
-        if (chdir(path) != 0) {
-            LOG_PANIC2("Failed to chdir. Error is %s", strerror(errno));
+        if (Cue_TrySetupSingle(path)) {
+            // path names a bare ISO9660 image (e.g. a ripped CD-ROM), not a
+            // directory: assets are served straight out of the image, so
+            // don't chdir into it. cwd stays at the launch dir, which is
+            // where gApplication_path (and so OPTIONS.TXT/SAVEGAME[_M])
+            // resolves -- a bare image has no writable directory of its own.
+            printf("Using ISO image: %s\n", path);
+            Iso_EnsureWritableDataDirs();
+        } else {
+            printf("Using game directory: %s\n", path);
+            if (chdir(path) != 0) {
+                LOG_PANIC2("Failed to chdir. Error is %s", strerror(errno));
+            }
         }
     }
 }
@@ -670,9 +684,38 @@ FILE* Harness_Hook_fopen(const char* pathname, const char* mode) {
     }
     f = OS_fopen(pathname, mode);
     if (f == NULL) {
+        f = Cue_FopenSingle(pathname, mode);
+    }
+    if (f == NULL) {
         f = Gog_FopenSingle(pathname, mode);
     }
     return f;
+}
+
+// Directory-listing hooks used by PDForEveryFile (LoadInRegisteeDir's
+// DATA/REG/PALETTES, SHADETAB, PIXELMAP, etc). A bare CUE/ISO install has no
+// on-disk DATA dir at all, so the real OS_GetFirstFileInDirectory always
+// comes back empty for these -- fall back to the single active disc, same as
+// Harness_Hook_fopen does for individual file opens. Not meld-aware: the
+// single-disc convenience layer is populated from the primary game dir
+// regardless of Meld, and REG assets aren't per-game.
+static int s_dir_iter_from_cue = 0;
+
+char* Harness_Hook_GetFirstFileInDirectory(char* path) {
+    char* found = OS_GetFirstFileInDirectory(path);
+    s_dir_iter_from_cue = 0;
+    if (found == NULL) {
+        found = (char*)Cue_GetFirstFileInDirectorySingle(path);
+        s_dir_iter_from_cue = (found != NULL);
+    }
+    return found;
+}
+
+char* Harness_Hook_GetNextFileInDirectory(void) {
+    if (s_dir_iter_from_cue) {
+        return (char*)Cue_GetNextFileInDirectorySingle();
+    }
+    return OS_GetNextFileInDirectory();
 }
 
 // Localization

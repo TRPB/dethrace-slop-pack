@@ -28,9 +28,22 @@ static int iso_snprintf(char* buf, int count, const char* fmt, ...) {
 #define ISO_PVD_ROOT_RECORD_OFFS  156
 
 #ifdef _WIN32
+#include <direct.h>
+#include <io.h>
 #include <windows.h>
+#define iso_access(p) _access((p), 0)
+#define iso_mkdir(p)  _mkdir(p)
+#define iso_stat_t    struct _stat
+#define iso_stat(p, s) _stat((p), (s))
 #else
 #include <dirent.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#define iso_access(p) access((p), F_OK)
+#define iso_mkdir(p)  mkdir((p), 0755)
+#define iso_stat_t    struct stat
+#define iso_stat(p, s) stat((p), (s))
 #endif
 
 struct tIso_image {
@@ -106,6 +119,37 @@ static int iso_find_entry(FILE* f, uint32_t dir_lba, uint32_t dir_size,
     return 0;
 }
 
+/* Navigate every slash-separated component of path_copy (destructively
+   tokenized) from the root, writing the resolved directory's LBA and size to
+   *lba and *size. Returns 1 on success, 0 if any component is missing or not
+   a directory. An empty path_copy resolves to the root directory. */
+static int iso_resolve_dir(FILE* f, char* path_copy, uint32_t* lba, uint32_t* size) {
+    uint8_t pvd[ISO_SECTOR_DATA];
+    int is_dir;
+    char* component;
+    char* strtok_state;
+
+    if (!iso_read_sector(f, ISO_PVD_SECTOR, pvd)) {
+        return 0;
+    }
+    *lba = le32(&pvd[ISO_PVD_ROOT_RECORD_OFFS + 2]);
+    *size = le32(&pvd[ISO_PVD_ROOT_RECORD_OFFS + 10]);
+
+    // strtok_r, not strtok: this can run while a caller further up the stack
+    // (e.g. LoadSpeedo mid-parse of a car's DATA/CARS/*.TXT line) has its own
+    // strtok() sequence in progress. LoadPixelmap() calls made while walking
+    // that line trigger a DRfopen() that lands here -- plain strtok's shared
+    // state would stomp on the outer scan and hand it a stale/NULL token.
+    component = strtok_r(path_copy, "/\\", &strtok_state);
+    while (component != NULL) {
+        if (!iso_find_entry(f, *lba, *size, component, 1, lba, size, &is_dir)) {
+            return 0;
+        }
+        component = strtok_r(NULL, "/\\", &strtok_state);
+    }
+    return 1;
+}
+
 tIso_image* Iso_Open(const char* path) {
     FILE* f;
     uint8_t pvd[ISO_SECTOR_DATA];
@@ -142,30 +186,15 @@ void Iso_Close(tIso_image* img) {
 
 int Iso_ListDir(tIso_image* img, const char* dir_path,
                 tIso_entry* entries, int max_entries, int* count) {
-    uint8_t pvd[ISO_SECTOR_DATA];
     uint32_t lba, size;
-    int is_dir;
-    /* Work through each slash-separated component of dir_path. */
     char path_copy[256];
-    char* component;
 
     *count = 0;
-    if (!iso_read_sector(img->f, ISO_PVD_SECTOR, pvd)) {
-        return -1;
-    }
-    lba = le32(&pvd[ISO_PVD_ROOT_RECORD_OFFS + 2]);
-    size = le32(&pvd[ISO_PVD_ROOT_RECORD_OFFS + 10]);
-
     strncpy(path_copy, dir_path, sizeof(path_copy) - 1);
     path_copy[sizeof(path_copy) - 1] = '\0';
 
-    /* Navigate each path component. */
-    component = strtok(path_copy, "/\\");
-    while (component != NULL) {
-        if (!iso_find_entry(img->f, lba, size, component, 1, &lba, &size, &is_dir)) {
-            return -1;
-        }
-        component = strtok(NULL, "/\\");
+    if (!iso_resolve_dir(img->f, path_copy, &lba, &size)) {
+        return -1;
     }
 
     /* List files in the final directory. */
@@ -281,4 +310,115 @@ int Iso_FindGogInDir(const char* dir, char* out, int out_size) {
     closedir(d);
     return 0;
 #endif
+}
+
+int Iso_FindFile(tIso_image* img, const char* file_path, tIso_entry* out) {
+    char dir_copy[256];
+    const char* leaf;
+    const char* last_slash = NULL;
+    const char* p;
+    uint32_t lba, size;
+    int id_len, j;
+
+    for (p = file_path; *p; p++) {
+        if (*p == '/' || *p == '\\') {
+            last_slash = p;
+        }
+    }
+    if (last_slash != NULL) {
+        size_t dir_len = (size_t)(last_slash - file_path);
+        if (dir_len >= sizeof(dir_copy)) {
+            dir_len = sizeof(dir_copy) - 1;
+        }
+        memcpy(dir_copy, file_path, dir_len);
+        dir_copy[dir_len] = '\0';
+        leaf = last_slash + 1;
+    } else {
+        dir_copy[0] = '\0';
+        leaf = file_path;
+    }
+
+    if (!iso_resolve_dir(img->f, dir_copy, &lba, &size)) {
+        return 0;
+    }
+    if (!iso_find_entry(img->f, lba, size, leaf, 0, &out->lba, &out->data_size, &j)) {
+        return 0;
+    }
+
+    memset(out->name, 0, sizeof(out->name));
+    id_len = (int)strlen(leaf);
+    if (id_len >= (int)sizeof(out->name)) {
+        id_len = (int)sizeof(out->name) - 1;
+    }
+    for (j = 0; j < id_len; j++) {
+        out->name[j] = (char)toupper((unsigned char)leaf[j]);
+    }
+    return 1;
+}
+
+FILE* Iso_Fopen(tIso_image* img, const char* file_path) {
+    tIso_entry entry;
+    if (!Iso_FindFile(img, file_path, &entry)) {
+        return NULL;
+    }
+    return Iso_ServeEntry(img, &entry);
+}
+
+tIso_image* Iso_OpenIfFile(const char* path) {
+    iso_stat_t st;
+    if (path == NULL || path[0] == '\0') {
+        return NULL;
+    }
+    if (iso_stat(path, &st) != 0) {
+        return NULL;
+    }
+    if ((st.st_mode & S_IFMT) != S_IFREG) {
+        return NULL;
+    }
+    return Iso_Open(path);
+}
+
+// ---------------------------------------------------------------------------
+// Single active-image convenience layer (non-meld mode)
+// ---------------------------------------------------------------------------
+
+static tIso_image* s_single_img = NULL;
+
+int Iso_TrySetupSingle(const char* path) {
+    tIso_image* img = Iso_OpenIfFile(path);
+    if (img == NULL) {
+        return 0;
+    }
+    if (s_single_img != NULL) {
+        Iso_Close(s_single_img);
+    }
+    s_single_img = img;
+    return 1;
+}
+
+FILE* Iso_FopenSingle(const char* pathname, const char* mode) {
+    if (s_single_img == NULL) {
+        return NULL;
+    }
+    if (strchr(mode, 'w') != NULL || strchr(mode, 'a') != NULL || strchr(mode, '+') != NULL) {
+        return NULL;
+    }
+    return Iso_Fopen(s_single_img, pathname);
+}
+
+int Iso_AccessSingle(const char* pathname) {
+    tIso_entry entry;
+    if (iso_access(pathname) == 0) {
+        return 0;
+    }
+    if (s_single_img != NULL && Iso_FindFile(s_single_img, pathname, &entry)) {
+        return 0;
+    }
+    return -1;
+}
+
+void Iso_EnsureWritableDataDirs(void) {
+    iso_mkdir("DATA");
+    iso_mkdir("DATA/SAVEGAME");
+    iso_mkdir("DATA/SAVEGAME_M");
 }

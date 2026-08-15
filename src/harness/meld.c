@@ -102,6 +102,9 @@ int gMeld_use_net_starts = 0;
 int s_game_method[MELD_MAX_GAMES];
 // Whether each game contributed at least one unique race (for PARTSHOP).
 static int s_game_contributed[MELD_MAX_GAMES];
+// Per-game ISO backing (see meld_internal.h).
+tIso_image* s_iso_backing[MELD_MAX_GAMES];
+tCue_sheet* s_cue_backing[MELD_MAX_GAMES];
 
 // Pre-built merged file contents (plain text).
 char* s_races_buf = NULL;
@@ -139,7 +142,15 @@ static int s_active_game = 0;
 static int s_overlay_game_idx = -1;
 
 // Music pool (absolute paths).
-static char s_music_paths[MELD_MAX_MUSIC][MAX_PATH];
+// A pool entry is either a real OGG file path or a CD-audio track inside a
+// .cue-backed game dir (see meld_build_music/Meld_ResolveMusicPath).
+typedef struct {
+    int is_cue;
+    char ogg_path[MAX_PATH];
+    tCue_sheet* cue_sheet;
+    tCue_audio_track cue_track;
+} tMeld_music_entry;
+static tMeld_music_entry s_music_pool[MELD_MAX_MUSIC];
 static uint64_t s_music_hashes[MELD_MAX_MUSIC];
 static int s_music_count = 0;
 static int s_music_index = 0;
@@ -196,9 +207,9 @@ static uint64_t meld_fnv1a(const void* data, size_t len) {
     return meld_fnv1a_feed(MELD_FNV_OFFSET, data, len);
 }
 
-// Hash a file's full contents. Returns 0 if the file could not be opened.
-static uint64_t meld_hash_file(const char* path) {
-    FILE* f = OS_fopen(path, "rb");
+// Hash an already-open stream's full contents and close it. Returns 0 if f
+// is NULL.
+static uint64_t meld_hash_stream(FILE* f) {
     uint64_t h = MELD_FNV_OFFSET;
     unsigned char buf[4096];
     size_t n;
@@ -210,6 +221,12 @@ static uint64_t meld_hash_file(const char* path) {
     }
     fclose(f);
     return h;
+}
+
+// Hash rel_path's full contents under a specific game dir (disk or ISO).
+// Returns 0 if the file could not be opened.
+static uint64_t meld_dir_hash_file(int game_idx, const char* rel_path) {
+    return meld_hash_stream(meld_dir_fopen(game_idx, rel_path, "rb"));
 }
 
 // ---------------------------------------------------------------------------
@@ -243,8 +260,8 @@ static void meld_add_conflict(const char* basename) {
 // Scan one subdir across all game dirs; any file whose content differs across
 // two games is added to the conflict set.
 
-static int meld_file_exists(const char* path) {
-    FILE* f = OS_fopen(path, "rb");
+static int meld_dir_file_exists(int game_idx, const char* rel_path) {
+    FILE* f = meld_dir_fopen(game_idx, rel_path, "rb");
     if (f != NULL) {
         fclose(f);
         return 1;
@@ -252,12 +269,12 @@ static int meld_file_exists(const char* path) {
     return 0;
 }
 
-// Compare two files by size then content using buffered reads.
-// Binary files are compared exactly; text files (.txt) strip \r so CRLF==LF.
-// Files larger than 4 MB are compared by size only.
+// Compare two files (by game dir + relative path) by size then content using
+// buffered reads. Binary files are compared exactly; text files (.txt) strip
+// \r so CRLF==LF. Files larger than 4 MB are compared by size only.
 #define MELD_MAX_COMPARE_BYTES (4 * 1024 * 1024)
 #define MELD_CMP_CHUNK 65536
-static int meld_files_same(const char* path_a, const char* path_b) {
+static int meld_dir_files_same(int game_a, const char* rel_a, int game_b, const char* rel_b) {
     FILE* fa;
     FILE* fb;
     long size_a, size_b;
@@ -267,8 +284,8 @@ static int meld_files_same(const char* path_a, const char* path_b) {
     static unsigned char buf_a[MELD_CMP_CHUNK];
     static unsigned char buf_b[MELD_CMP_CHUNK];
 
-    fa = OS_fopen(path_a, "rb");
-    fb = OS_fopen(path_b, "rb");
+    fa = meld_dir_fopen(game_a, rel_a, "rb");
+    fb = meld_dir_fopen(game_b, rel_b, "rb");
     if (fa == NULL || fb == NULL) {
         if (fa) { fclose(fa); }
         if (fb) { fclose(fb); }
@@ -284,7 +301,7 @@ static int meld_files_same(const char* path_a, const char* path_b) {
     }
 
     /* Binary files: sizes must match for them to be the same. */
-    ext = strrchr(path_a, '.');
+    ext = strrchr(rel_a, '.');
     is_text = ext && strcasecmp(ext, ".txt") == 0;
     if (!is_text && size_a != size_b) {
         fclose(fa); fclose(fb);
@@ -317,10 +334,7 @@ static int meld_files_same(const char* path_a, const char* path_b) {
 }
 
 static void meld_scan_subdir_conflicts(const char* subdir) {
-    char dir_a[MAX_PATH];
-    char dir_b[MAX_PATH];
-    char file_a[MAX_PATH];
-    char file_b[MAX_PATH];
+    char rel[MAX_PATH];
     const char* fname;
     int g, other;
     int gc = harness_game_config.game_dirs_count;
@@ -331,26 +345,23 @@ static void meld_scan_subdir_conflicts(const char* subdir) {
 
 
     for (g = 0; g < gc && g < MELD_MAX_GAMES; g++) {
-        meld_join(dir_a, sizeof(dir_a), harness_game_config.game_dirs[g].directory, subdir);
-        fname = OS_GetFirstFileInDirectory(dir_a);
+        fname = meld_dir_first_file(g, subdir);
         while (fname != NULL) {
             if (fname[0] != '.' && !meld_is_conflict(fname)) {
-                meld_join(file_a, sizeof(file_a), dir_a, fname);
+                meld_join(rel, sizeof(rel), subdir, fname);
                 for (other = 0; other < gc && other < MELD_MAX_GAMES; other++) {
                     if (other == g) {
                         continue;
                     }
-                    meld_join(dir_b, sizeof(dir_b), harness_game_config.game_dirs[other].directory, subdir);
-                    meld_join(file_b, sizeof(file_b), dir_b, fname);
                     // Only a conflict if the file actually exists in the other
                     // game AND the content genuinely differs beyond line endings.
-                    if (meld_file_exists(file_b) && !meld_files_same(file_a, file_b)) {
+                    if (meld_dir_file_exists(other, rel) && !meld_dir_files_same(g, rel, other, rel)) {
                         meld_add_conflict(fname);
                         break;
                     }
                 }
             }
-            fname = OS_GetNextFileInDirectory();
+            fname = meld_dir_next_file();
         }
     }
 }
@@ -387,13 +398,69 @@ void meld_join(char* dest, size_t len, const char* a, const char* b) {
     strncat(dest, b, len - a_len - 2);
 }
 
+// Directory-listing cursor state for meld_dir_first_file/meld_dir_next_file's
+// ISO-backed branch, mirroring OS_GetFirstFileInDirectory/
+// OS_GetNextFileInDirectory's single-cursor semantics (no nested scans).
+static tIso_entry s_dir_cursor_entries[4096];
+static int s_dir_cursor_count = 0;
+static int s_dir_cursor_pos = 0;
+static int s_dir_cursor_from_iso = 0;
+
+FILE* meld_dir_fopen(int game_idx, const char* rel_path, const char* mode) {
+    if (game_idx < 0 || game_idx >= MELD_MAX_GAMES) {
+        return NULL;
+    }
+    if (s_iso_backing[game_idx] != NULL) {
+        // ISO images are read-only media.
+        if (strchr(mode, 'w') != NULL || strchr(mode, 'a') != NULL || strchr(mode, '+') != NULL) {
+            return NULL;
+        }
+        return Iso_Fopen(s_iso_backing[game_idx], rel_path);
+    }
+    {
+        char path[MAX_PATH];
+        meld_join(path, sizeof(path), harness_game_config.game_dirs[game_idx].directory, rel_path);
+        return OS_fopen(path, mode);
+    }
+}
+
+const char* meld_dir_first_file(int game_idx, const char* rel_subdir) {
+    if (game_idx < 0 || game_idx >= MELD_MAX_GAMES) {
+        return NULL;
+    }
+    if (s_iso_backing[game_idx] != NULL) {
+        if (Iso_ListDir(s_iso_backing[game_idx], rel_subdir, s_dir_cursor_entries,
+                (int)(sizeof(s_dir_cursor_entries) / sizeof(s_dir_cursor_entries[0])),
+                &s_dir_cursor_count) != 0) {
+            s_dir_cursor_count = 0;
+        }
+        s_dir_cursor_pos = 0;
+        s_dir_cursor_from_iso = 1;
+        return meld_dir_next_file();
+    }
+    s_dir_cursor_from_iso = 0;
+    {
+        char path[MAX_PATH];
+        meld_join(path, sizeof(path), harness_game_config.game_dirs[game_idx].directory, rel_subdir);
+        return OS_GetFirstFileInDirectory(path);
+    }
+}
+
+const char* meld_dir_next_file(void) {
+    if (s_dir_cursor_from_iso) {
+        if (s_dir_cursor_pos >= s_dir_cursor_count) {
+            return NULL;
+        }
+        return s_dir_cursor_entries[s_dir_cursor_pos++].name;
+    }
+    return OS_GetNextFileInDirectory();
+}
+
 // Open DATA/<name> under a specific game directory.
 FILE* meld_open_data(int game_idx, const char* name, const char* mode) {
-    char path[MAX_PATH];
-    char data[MAX_PATH];
-    meld_join(data, sizeof(data), harness_game_config.game_dirs[game_idx].directory, "DATA");
-    meld_join(path, sizeof(path), data, name);
-    return OS_fopen(path, mode);
+    char rel[MAX_PATH];
+    meld_join(rel, sizeof(rel), "DATA", name);
+    return meld_dir_fopen(game_idx, rel, mode);
 }
 
 // Detect the encode method for a game by inspecting DATA/GENERAL.TXT.
@@ -780,13 +847,11 @@ static int meld_read_one_opponent(FILE* f, int method, int game_idx, tMeld_oppon
     // the file isn't present locally (e.g. XMASDEMO shares CARSPLAT's CARS/).
     {
         char carpath[MAX_PATH];
-        char cars[MAX_PATH];
         int g2;
         o->car_hash = 0;
         for (g2 = 0; g2 < harness_game_config.game_dirs_count && g2 < MELD_MAX_GAMES; g2++) {
-            meld_join(cars, sizeof(cars), harness_game_config.game_dirs[g2].directory, "DATA" MELD_SEP "CARS");
-            meld_join(carpath, sizeof(carpath), cars, o->car_file);
-            o->car_hash = meld_hash_file(carpath);
+            meld_join(carpath, sizeof(carpath), "DATA" MELD_SEP "CARS", o->car_file);
+            o->car_hash = meld_dir_hash_file(g2, carpath);
             if (o->car_hash != 0) {
                 break;
             }
@@ -1123,8 +1188,6 @@ static void meld_build_partshop(void) {
     for (g = 0; g < harness_game_config.game_dirs_count && g < MELD_MAX_GAMES; g++) {
         FILE* f;
         int method = s_game_method[g];
-        char path[MAX_PATH];
-        char data[MAX_PATH];
         uint64_t h;
         int dup = 0;
         char s[MELD_LINE_LEN];
@@ -1132,9 +1195,7 @@ static void meld_build_partshop(void) {
         if (!s_game_contributed[g]) {
             continue;
         }
-        meld_join(data, sizeof(data), harness_game_config.game_dirs[g].directory, "DATA");
-        meld_join(path, sizeof(path), data, "PARTSHOP.TXT");
-        h = meld_hash_file(path);
+        h = meld_dir_hash_file(g, "DATA" MELD_SEP "PARTSHOP.TXT");
         for (k = 0; k < seen_count; k++) {
             if (seen_hash[k] == h && h != 0) {
                 dup = 1;
@@ -1226,24 +1287,42 @@ static void meld_build_partshop(void) {
 // Music pool
 // ---------------------------------------------------------------------------
 
+// Adds entry to the pool if h isn't already present (dedup by content hash,
+// same rule for both OGG files and CD-audio tracks). Returns 1 if added.
+static int meld_music_pool_add(const tMeld_music_entry* entry, uint64_t h) {
+    int k;
+    for (k = 0; k < s_music_count; k++) {
+        if (s_music_hashes[k] == h) {
+            return 0;
+        }
+    }
+    if (s_music_count >= MELD_MAX_MUSIC) {
+        return 0;
+    }
+    s_music_pool[s_music_count] = *entry;
+    s_music_hashes[s_music_count] = h;
+    s_music_count++;
+    return 1;
+}
+
 static void meld_build_music(void) {
     int g;
     int t;
     s_music_count = 0;
     s_music_index = 0;
 
-    // Deduplicate by a lightweight hash of the first 4KB + a track number scan.
+    // Deduplicate by a lightweight hash of the first 4KB + total byte length,
+    // the same rule applied to both sources below.
     for (g = 0; g < harness_game_config.game_dirs_count && g < MELD_MAX_GAMES; g++) {
-        // Tracks are Track02..Track09.
+        // OGG files placed under MUSIC/, tracks Track02..Track09.
         for (t = 2; t <= 9; t++) {
             char rel[64];
             char path[MAX_PATH];
             uint64_t h;
-            int k;
-            int dup = 0;
             FILE* f;
             unsigned char head[4096];
             size_t n;
+            tMeld_music_entry entry;
 
             snprintf(rel, sizeof(rel), "MUSIC" MELD_SEP "Track0%d.ogg", t);
             meld_join(path, sizeof(path), harness_game_config.game_dirs[g].directory, rel);
@@ -1259,16 +1338,39 @@ static void meld_build_music(void) {
             }
             fclose(f);
 
-            for (k = 0; k < s_music_count; k++) {
-                if (s_music_hashes[k] == h) {
-                    dup = 1;
-                    break;
+            memset(&entry, 0, sizeof(entry));
+            entry.is_cue = 0;
+            snprintf(entry.ogg_path, sizeof(entry.ogg_path), "%s", path);
+            meld_music_pool_add(&entry, h);
+        }
+
+        // CD-audio tracks inside a .cue-backed game dir.
+        if (s_cue_backing[g] != NULL) {
+            int n_tracks = Cue_AudioTrackCount(s_cue_backing[g]);
+            int idx;
+            for (idx = 0; idx < n_tracks; idx++) {
+                tCue_audio_track track;
+                unsigned char head[4096];
+                size_t n;
+                uint64_t byte_len;
+                uint64_t h;
+                tMeld_music_entry entry;
+
+                if (!Cue_GetAudioTrack(s_cue_backing[g], idx, &track)) {
+                    continue;
                 }
-            }
-            if (!dup && s_music_count < MELD_MAX_MUSIC) {
-                snprintf(s_music_paths[s_music_count], MAX_PATH, "%s", path);
-                s_music_hashes[s_music_count] = h;
-                s_music_count++;
+                n = Cue_ReadAudioTrackHead(s_cue_backing[g], &track, head, sizeof(head));
+                if (n == 0) {
+                    continue;
+                }
+                byte_len = (uint64_t)(track.end_lba - track.start_lba) * 2352;
+                h = meld_fnv1a(head, n) ^ byte_len;
+
+                memset(&entry, 0, sizeof(entry));
+                entry.is_cue = 1;
+                entry.cue_sheet = s_cue_backing[g];
+                entry.cue_track = track;
+                meld_music_pool_add(&entry, h);
             }
         }
     }
@@ -1282,10 +1384,37 @@ void Meld_ResolveMusicPath(int track, char* out, size_t len) {
     // Meld cycles through the merged pool regardless of which CD track the game
     // originally requested; only called when s_music_count > 0 (guarded by
     // Meld_MusicAvailable() in AudioBackend_InitCDA).
+    tMeld_music_entry* entry;
     (void)track;
-    strncpy(out, s_music_paths[s_music_index % s_music_count], len - 1);
-    out[len - 1] = 0;
+    out[0] = 0;
+    entry = &s_music_pool[s_music_index % s_music_count];
     s_music_index++;
+
+    if (!entry->is_cue) {
+        strncpy(out, entry->ogg_path, len - 1);
+        out[len - 1] = 0;
+        return;
+    }
+
+    // CD-audio tracks have no file of their own: materialize the selected
+    // track as a small WAV (overwritten on each call) in the writable pref
+    // dir and hand back that path -- AudioBackend_PlayCDA only knows how to
+    // load a real file, and this keeps it (and miniaudio.c) unchanged.
+    {
+        char pref_dir[MAX_PATH];
+        char wav_path[MAX_PATH];
+        if (OS_GetPrefPath(pref_dir, "dethrace") != 0) {
+            return;
+        }
+        if (strlen(pref_dir) + strlen("dethrace_cda_track.wav") >= sizeof(wav_path)) {
+            return;
+        }
+        snprintf(wav_path, sizeof(wav_path), "%sdethrace_cda_track.wav", pref_dir);
+        if (Cue_WriteAudioTrackWav(entry->cue_sheet, &entry->cue_track, wav_path)) {
+            strncpy(out, wav_path, len - 1);
+            out[len - 1] = 0;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1331,6 +1460,25 @@ void Meld_Init(void) {
 
     gMeld_both_starting_cars = harness_game_config.meld_both_starting_cars;
 
+    // Detect [Games] entries that name a bare ISO9660/BIN file or a .cue
+    // sheet (e.g. a ripped CD-ROM image) rather than a directory.
+    // meld_dir_fopen/meld_dir_first_file resolve inside the image for any
+    // game dir with a non-NULL backing here; s_cue_backing additionally
+    // carries the audio-track table for CD-audio-backed music (see
+    // meld_build_music below).
+    {
+        int any_iso = 0;
+        for (g = 0; g < harness_game_config.game_dirs_count && g < MELD_MAX_GAMES; g++) {
+            s_iso_backing[g] = Cue_OpenDisc(harness_game_config.game_dirs[g].directory, &s_cue_backing[g]);
+            any_iso = any_iso || (s_iso_backing[g] != NULL);
+        }
+        if (any_iso) {
+            // A bare image has no writable directories of its own for save
+            // files; make sure ./DATA(/SAVEGAME[_M]) exists on real disk.
+            Iso_EnsureWritableDataDirs();
+        }
+    }
+
     for (g = 0; g < harness_game_config.game_dirs_count && g < MELD_MAX_GAMES; g++) {
         s_game_method[g] = meld_detect_method(g);
         // Overlay dir has no GENERAL.TXT; treat its files as plain text.
@@ -1359,9 +1507,14 @@ void Meld_Init(void) {
     // secondary game's method).
     gEncryption_method = 0;
 
-    // Index GOG images for all game dirs so cutscenes can be served from them.
+    // Index GOG sidecar images for all real-directory game dirs so cutscenes
+    // can be served from them. ISO-backed game dirs already serve everything
+    // (including cutscenes) directly out of the image via meld_dir_fopen, so
+    // there's no separate .GOG sidecar to look for.
     for (g = 0; g < harness_game_config.game_dirs_count && g < MELD_MAX_GAMES; g++) {
-        Gog_InitSlot(g, harness_game_config.game_dirs[g].directory);
+        if (s_iso_backing[g] == NULL) {
+            Gog_InitSlot(g, harness_game_config.game_dirs[g].directory);
+        }
     }
     Gog_BuildIntroProviders();
 
@@ -1527,15 +1680,16 @@ static int meld_is_identity_line(const char* decoded, const char* basename) {
 
 // Read raw_path, decode @-prefixed lines (method 1), patch conflicting asset
 // basenames to "N:basename", re-encode, and serve the result as a tmpfile.
-static FILE* meld_patch_txt_serve(const char* raw_path, int game_idx, int method) {
-    FILE* src;
+// Core patch pipeline: consumes and closes an already-open stream. name_hint
+// is used only for the identity-line/basename check below (it need not be a
+// real filesystem path -- it can be the relative path used to open src,
+// including when src came from inside an ISO image).
+static FILE* meld_patch_txt_serve_stream(FILE* src, const char* name_hint, int game_idx, int method) {
     tMeld_buf buf;
     char line[1024];
     char decoded[1024];
     char patched[1024];
 
-
-    src = OS_fopen(raw_path, "rt");
     if (src == NULL) {
         return NULL;
     }
@@ -1565,8 +1719,8 @@ static FILE* meld_patch_txt_serve(const char* raw_path, int game_idx, int method
             // canonical filename from the path instead of the decoded content,
             // because some mods encode trailing non-separator bytes after the name
             // that strtok does not strip, causing the strcmp to fail.
-            if (is_encoded && data_line_idx == 0 && meld_is_identity_line(decoded, meld_basename(raw_path))) {
-                strncpy(patched, meld_basename(raw_path), sizeof(patched) - 1);
+            if (is_encoded && data_line_idx == 0 && meld_is_identity_line(decoded, meld_basename(name_hint))) {
+                strncpy(patched, meld_basename(name_hint), sizeof(patched) - 1);
                 patched[sizeof(patched) - 1] = 0;
             } else {
                 meld_patch_line(decoded, game_idx, patched, sizeof(patched));
@@ -1612,6 +1766,12 @@ static FILE* meld_patch_txt_serve(const char* raw_path, int game_idx, int method
         return f;
     }
 #endif
+}
+
+// Path-based convenience wrapper for callers that have a real filesystem
+// path rather than an already-open stream (e.g. test fixtures).
+static FILE* meld_patch_txt_serve(const char* raw_path, int game_idx, int method) {
+    return meld_patch_txt_serve_stream(OS_fopen(raw_path, "rt"), raw_path, game_idx, method);
 }
 
 // ---------------------------------------------------------------------------
@@ -1683,7 +1843,6 @@ FILE* Meld_fopen(const char* path, const char* mode) {
             size_t dir_len = (size_t)(base - path);
             char real_path[MAX_PATH];
             char tail[MAX_PATH];
-            char candidate[MAX_PATH];
             // Reconstruct real path: same directory part, with the "N:" prefix stripped.
             if (dir_len < sizeof(real_path) - 1) {
                 memcpy(real_path, path, dir_len);
@@ -1694,14 +1853,7 @@ FILE* Meld_fopen(const char* path, const char* mode) {
                 real_path[sizeof(real_path) - 1] = 0;
             }
             meld_relative_tail(real_path, tail, sizeof(tail));
-            meld_join(candidate, sizeof(candidate), harness_game_config.game_dirs[n_game].directory, tail);
-            {
-                FILE* f = OS_fopen(candidate, mode);
-                if (f != NULL) {
-                    return f;
-                }
-            }
-            return NULL;
+            return meld_dir_fopen(n_game, tail, mode);
         }
     }
 
@@ -1737,7 +1889,6 @@ FILE* Meld_fopen(const char* path, const char* mode) {
     // 3. Rebuild with each game dir: active game first, then all in order.
     {
         char tail[MAX_PATH];
-        char candidate[MAX_PATH];
         int order[MELD_MAX_GAMES];
         int n = 0;
         int g;
@@ -1761,21 +1912,17 @@ FILE* Meld_fopen(const char* path, const char* mode) {
         }
 
         for (g = 0; g < n; g++) {
-            FILE* f;
-            meld_join(candidate, sizeof(candidate), harness_game_config.game_dirs[order[g]].directory, tail);
-            f = OS_fopen(candidate, mode);
+            FILE* f = meld_dir_fopen(order[g], tail, mode);
             if (f != NULL) {
                 // Phase 6: patch TXT files in RACES/, CARS/, NONCARS/ when
                 // the conflict map has entries (assets differ across games).
                 if (s_conflict_count > 0 && meld_needs_patching(tail)) {
-                    FILE* patched;
-                    fclose(f);
-                    patched = meld_patch_txt_serve(candidate, order[g], s_game_method[order[g]]);
+                    FILE* patched = meld_patch_txt_serve_stream(f, tail, order[g], s_game_method[order[g]]);
                     if (patched != NULL) {
                         return patched;
                     }
-                    LOG_WARN2("Meld_fopen: patch failed, serving raw: %s", candidate);
-                    f = OS_fopen(candidate, mode);
+                    LOG_WARN2("Meld_fopen: patch failed, serving raw: %s", tail);
+                    f = meld_dir_fopen(order[g], tail, mode);
                     if (f != NULL) {
                         return f;
                     }

@@ -705,12 +705,23 @@ void PDBuildAppPath(char* pThe_path) {
 void PDForEveryFile(char* pThe_path, void (*pAction_routine)(char*)) {
     char find_path[256];
     char found_path[256];
+    char* found;
 
-    char* found = OS_GetFirstFileInDirectory(pThe_path);
+#ifdef DETHRACE_FIX_BUGS
+    // A bare CUE/ISO install has no on-disk DATA dir for the real
+    // OS_GetFirstFileInDirectory to find -- fall back to the active disc image.
+    found = Harness_Hook_GetFirstFileInDirectory(pThe_path);
+#else
+    found = OS_GetFirstFileInDirectory(pThe_path);
+#endif
     while (found != NULL) {
         PathCat(found_path, pThe_path, found);
         pAction_routine(found_path);
+#ifdef DETHRACE_FIX_BUGS
+        found = Harness_Hook_GetNextFileInDirectory();
+#else
         found = OS_GetNextFileInDirectory();
+#endif
     }
 }
 

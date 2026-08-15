@@ -113,7 +113,17 @@ void EncodeLine(char* pS) {
         char s[256];
         PathCat(the_path, gApplication_path, "GENERAL.TXT");
 
+#ifdef DETHRACE_FIX_BUGS
+        // A bare CUE/ISO install has no on-disk GENERAL.TXT for a raw fopen()
+        // to find, so this probe always fell through to the "not found" case
+        // below and silently assumed method 2 -- wrong for any release that
+        // actually needs method 1, corrupting text in a way that's mostly
+        // legible (only some byte values differ between the two ciphers) but
+        // eventually loses a token and crashes a caller's sscanf.
+        test = Harness_Hook_fopen(the_path, "rt");
+#else
         test = fopen(the_path, "rt");
+#endif
         if (test != NULL) {
             fgets(s, 256, test);
             if (s[0] == '@') {

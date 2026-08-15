@@ -107,11 +107,9 @@ static int meld_extract_map_pix(int game_idx, int method, const char* track_file
     int mat_streak;
     size_t ln;
 
-    meld_join(path, sizeof(path), harness_game_config.game_dirs[game_idx].directory, "DATA");
-    meld_join(path, sizeof(path), path, "RACES");
-    meld_join(path, sizeof(path), path, track_file);
+    meld_join(path, sizeof(path), "DATA" MELD_SEP "RACES", track_file);
 
-    f = OS_fopen(path, "rb");
+    f = meld_dir_fopen(game_idx, path, "rb");
     if (f == NULL) {
         return 0;
     }

@@ -72,6 +72,8 @@ extern void Harness_Quit(void);
 
 // Filesystem hooks
 FILE* Harness_Hook_fopen(const char* pathname, const char* mode);
+char* Harness_Hook_GetFirstFileInDirectory(char* path);
+char* Harness_Hook_GetNextFileInDirectory(void);
 
 // Localization
 int Harness_Hook_isalnum(int c);

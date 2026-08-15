@@ -48,6 +48,7 @@ target_sources(harness PRIVATE
     include/harness/meld.h
     include/harness/iso.h
     include/harness/gog.h
+    include/harness/cue.h
 
     ascii_tables.h
     harness_trace.c
@@ -55,6 +56,7 @@ target_sources(harness PRIVATE
     harness.h
     iso.c
     gog.c
+    cue.c
     meld_internal.h
     meld.c
     meld_netraces.c
