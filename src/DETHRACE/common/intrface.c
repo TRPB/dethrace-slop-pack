@@ -211,8 +211,10 @@ int DoInterfaceScreen(tInterface_spec* pSpec, int pOptions, int pCurrent_choice)
     void* palette_copy;
 
 #if defined(DETHRACE_FIX_BUGS)
+    last_mouse_down = 0;
     mouse_down = 0;
     gWs_menu_mode = 1;
+    copy_areas = NULL;
 #endif
     entry_status = gProgram_state.prog_status;
     last_press = 0;

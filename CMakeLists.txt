@@ -171,9 +171,15 @@ if(BUILD_TESTS)
 endif()
 
 if(DETHRACE_INSTALL)
-    install(FILES LICENSE
-        DESTINATION "${CMAKE_INSTALL_DOCDIR}"
-    )
+    if(APPLE)
+        install(FILES LICENSE
+            DESTINATION "."
+        )
+    else()
+        install(FILES LICENSE
+            DESTINATION "${CMAKE_INSTALL_DOCDIR}"
+        )
+    endif()
 
     if(EXISTS "${CMAKE_SOURCE_DIR}/DATA")
         install(DIRECTORY "${CMAKE_SOURCE_DIR}/DATA"
