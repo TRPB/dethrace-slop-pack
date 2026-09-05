@@ -983,7 +983,11 @@ void MungePedestrianSequence(tPedestrian_data* pPedestrian, int pAction_changed)
                 // frame, cycling through two sequences with different flipped flags.
                 // Add a 1° dead zone at each zone's lower edge: only commit to the
                 // new sequence if we're clearly inside it, not just barely entered.
-                if (harness_game_config.fix_ped_spasm) {
+                // Never applies right after an action change: current_sequence then
+                // belongs to the old action, so skipping the assignment would leave
+                // it stuck showing a stale, unrelated pose (e.g. still standing after
+                // switching to the death action) instead of a same-action flicker.
+                if (harness_game_config.fix_ped_spasm && !pAction_changed) {
                     float lower_bound = (i > 0) ? the_action->sequences[i - 1].max_bearing : 0.f;
                     if (heading_difference - lower_bound < 1.f) {
                         break;
@@ -4138,25 +4142,6 @@ void RenderProximityRays(br_pixelmap* pRender_screen, br_pixelmap* pDepth_buffer
     }
 #endif
     StartPipingSession(ePipe_chunk_prox_ray);
-#ifdef DETHRACE_3DFX_PATCH
-    if (gNo_2d_effects) {
-        BrActorRemove(gLine_actor);
-        BrActorAdd(pCamera, gLine_actor);
-        gLine_material->extra_prim = gProxRayBlendTokens;
-        BrMaterialUpdate(gLine_material, BR_MATU_EXTRA_PRIM);
-        gLine_model->vertices[0].red = 215;
-        gLine_model->vertices[0].grn = 255;
-        gLine_model->vertices[0].blu = 233;
-        gLine_model->vertices[1].red = 215;
-        gLine_model->vertices[1].grn = 255;
-        gLine_model->vertices[1].blu = 233;
-        gLine_model->vertices[2].red = 215;
-        gLine_model->vertices[2].grn = 255;
-        gLine_model->vertices[2].blu = 233;
-        BrModelUpdate(gLine_model, BR_MODU_ALL);
-    }
-#endif
-    StartPipingSession(ePipe_chunk_prox_ray);
     for (i = 0; i < COUNT_OF(gProximity_rays); i++) {
         if (gProximity_rays[i].start_time == 0) {
             continue;
@@ -4216,15 +4201,6 @@ void RenderProximityRays(br_pixelmap* pRender_screen, br_pixelmap* pDepth_buffer
             gProximity_rays[i].start_time = 0;
         }
     }
-    EndPipingSession();
-#ifdef DETHRACE_3DFX_PATCH
-    if (gNo_2d_effects) {
-        gLine_material->extra_prim = NULL;
-        BrMaterialUpdate(gLine_material, BR_MATU_EXTRA_PRIM);
-        BrActorRemove(gLine_actor);
-        BrActorAdd(gDont_render_actor, gLine_actor);
-    }
-#endif
     EndPipingSession();
 #ifdef DETHRACE_3DFX_PATCH
     if (gNo_2d_effects) {
