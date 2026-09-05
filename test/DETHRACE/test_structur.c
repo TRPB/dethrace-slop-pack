@@ -74,7 +74,10 @@ void test_structur_ChooseOpponent_other_player_disabled(void) {
     TEST_ASSERT_EQUAL_INT(0, anna_seen);
 }
 
-// ChooseOpponent with add_other_player_as_opponent=1: Anna must appear at least once in 100 tries.
+// ChooseOpponent with add_other_player_as_opponent=1: Anna must appear at
+// least once in 100 tries when asked for her assigned band (3), and must
+// never appear for a different band (1) - she competes for one band like
+// any other racer instead of being eligible in every band.
 void test_structur_ChooseOpponent_other_player_enabled(void) {
     int i;
     int had_scum;
@@ -91,7 +94,7 @@ void test_structur_ChooseOpponent_other_player_enabled(void) {
             s_test_opponents[j].picked = 0;
         }
         had_scum = 0;
-        int chosen = ChooseOpponent(1, &had_scum);
+        int chosen = ChooseOpponent(3, &had_scum);
         if (chosen == 1) {
             anna_seen = 1;
             break;
@@ -99,9 +102,16 @@ void test_structur_ChooseOpponent_other_player_enabled(void) {
     }
 
     TEST_ASSERT_EQUAL_INT_MESSAGE(1, anna_seen, "Anna never appeared after 100 races");
+
+    for (i = 0; i < s_test_opponent_count; i++) {
+        s_test_opponents[i].picked = 0;
+    }
+    had_scum = 0;
+    TEST_ASSERT_MESSAGE(ChooseOpponent(1, &had_scum) != 1, "Anna appeared for a band that isn't hers");
 }
 
-// Playing as Anna with the feature on, Max (car_number=100) must appear.
+// Playing as Anna with the feature on, Max (car_number=100) must appear
+// when asked for his assigned band (3).
 void test_structur_ChooseOpponent_as_anna_max_appears(void) {
     int i;
     int had_scum;
@@ -118,7 +128,7 @@ void test_structur_ChooseOpponent_as_anna_max_appears(void) {
             s_test_opponents[j].picked = 0;
         }
         had_scum = 0;
-        int chosen = ChooseOpponent(1, &had_scum);
+        int chosen = ChooseOpponent(3, &had_scum);
         if (chosen == 0) {
             max_seen = 1;
             break;
@@ -150,7 +160,7 @@ void test_structur_ChooseOpponent_other_player_enabled_meld(void) {
             gOpponents[j].picked = 0;
         }
         had_scum = 0;
-        int chosen = ChooseOpponent(1, &had_scum);
+        int chosen = ChooseOpponent(3, &had_scum);
         if (gOpponents[chosen].car_number == anna_car_number) {
             anna_seen = 1;
             break;

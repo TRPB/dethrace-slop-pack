@@ -380,8 +380,6 @@ int ChooseOpponent(int pNastiness, int* pHad_scum) {
     // melding; exclude every variant so the player never races themselves.
     int player_cid = Meld_OpponentCharacterId(gProgram_state.current_car.index);
     // car_number used by the unchosen player character (Max=100, Anna=101).
-    // AddOtherPlayerCharacterAsOpponent gives it a real strength_rating at load
-    // time (see loading.c), so it competes for one band like any other racer.
     int other_player_car_number = gProgram_state.frank_or_anniness == eFrankie ? 101 : 100;
     // Without meld, OPPONENT.TXT contains all colour variants of the other
     // player's car (ANNBLUE, ANNBLAK, etc.). Restrict to the canonical starting
@@ -395,7 +393,18 @@ int ChooseOpponent(int pNastiness, int* pHad_scum) {
 
     count = 0;
     for (i = 0; i < gNumber_of_racers; ++i) {
-        if (gOpponents[i].strength_rating == pNastiness
+#ifdef DETHRACE_FIX_BUGS
+        // The unchosen player character has no strength_rating of its own (-1 in
+        // OPPONENT.TXT). Treat it as this fixed band so it competes for one band
+        // like any other racer, instead of being added as an extra, always-eligible
+        // candidate to every band regardless of pNastiness.
+        int effective_strength_rating = (harness_game_config.add_other_player_as_opponent && gOpponents[i].car_number == other_player_car_number)
+            ? 3
+            : gOpponents[i].strength_rating;
+#else
+        int effective_strength_rating = gOpponents[i].strength_rating;
+#endif
+        if (effective_strength_rating == pNastiness
             && gProgram_state.current_car.index != i
 #ifdef DETHRACE_FIX_BUGS
             && !(player_cid >= 0 && Meld_OpponentCharacterId(i) == player_cid)

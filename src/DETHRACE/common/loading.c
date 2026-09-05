@@ -2955,14 +2955,8 @@ void LoadOpponents(void) {
         if (harness_game_config.add_other_player_as_opponent) {
             if (gOpponents[i].car_number == 100) {
                 strcpy(gOpponents[i].mug_shot_name, "FRANK.FLI");
-                // The unchosen player character has no strength_rating of its own
-                // (-1 in OPPONENT.TXT). Give it a real one so ChooseOpponent picks
-                // it through the normal per-band pool instead of adding it as an
-                // extra, always-eligible candidate to every band.
-                gOpponents[i].strength_rating = 3;
             } else if (gOpponents[i].car_number == 101) {
                 strcpy(gOpponents[i].mug_shot_name, "ANNIE.FLI");
-                gOpponents[i].strength_rating = 3;
             }
         }
 #endif
