@@ -380,7 +380,8 @@ int ChooseOpponent(int pNastiness, int* pHad_scum) {
     // melding; exclude every variant so the player never races themselves.
     int player_cid = Meld_OpponentCharacterId(gProgram_state.current_car.index);
     // car_number used by the unchosen player character (Max=100, Anna=101).
-    // Variants of that character are eligible regardless of nastiness band.
+    // AddOtherPlayerCharacterAsOpponent gives it a real strength_rating at load
+    // time (see loading.c), so it competes for one band like any other racer.
     int other_player_car_number = gProgram_state.frank_or_anniness == eFrankie ? 101 : 100;
     // Without meld, OPPONENT.TXT contains all colour variants of the other
     // player's car (ANNBLUE, ANNBLAK, etc.). Restrict to the canonical starting
@@ -394,14 +395,15 @@ int ChooseOpponent(int pNastiness, int* pHad_scum) {
 
     count = 0;
     for (i = 0; i < gNumber_of_racers; ++i) {
-        if ((gOpponents[i].strength_rating == pNastiness
-#ifdef DETHRACE_FIX_BUGS
-             || (harness_game_config.add_other_player_as_opponent && gOpponents[i].car_number == other_player_car_number && (other_player_car_file == NULL || gOpponents[i].car_file_name[0] == '\0' || strcasecmp(gOpponents[i].car_file_name, other_player_car_file) == 0))
-#endif
-            )
+        if (gOpponents[i].strength_rating == pNastiness
             && gProgram_state.current_car.index != i
 #ifdef DETHRACE_FIX_BUGS
             && !(player_cid >= 0 && Meld_OpponentCharacterId(i) == player_cid)
+            // Without meld, OPPONENT.TXT lists every colour variant of the other
+            // player's car (ANNBLUE, ANNBLAK, etc.) as a separate entry sharing
+            // this strength band; restrict to the canonical starting car so a
+            // colour variant is never picked instead of the yellow default.
+            && (gOpponents[i].car_number != other_player_car_number || other_player_car_file == NULL || gOpponents[i].car_file_name[0] == '\0' || strcasecmp(gOpponents[i].car_file_name, other_player_car_file) == 0)
 #endif
             && !gOpponents[i].picked
             && Meld_IsOpponentEligible(i)
