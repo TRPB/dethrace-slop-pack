@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include "brucetrk.h"
 #include "car.h"
 #include "controls.h"
 #include "depth.h"
@@ -607,6 +608,16 @@ void InitialiseApplication(int pArgc, char** pArgv) {
     strcpy(gProgram_state.player_name[0], "MAX DAMAGE");
     strcpy(gProgram_state.player_name[1], "DIE ANNA");
     RestoreOptions();
+#if defined(DETHRACE_FIX_BUGS)
+    // ExtendDrawDistance's Yon override otherwise only applies inside
+    // SetGraphicsOptions(), which only runs when the player exits the in-game
+    // Graphics Options screen. Apply it here too so a fresh profile (no saved
+    // OPTIONS.TXT yet) gets the extended distance without visiting Options first.
+    if (harness_game_config.extend_draw_distance) {
+        SetYon(1000.f);
+        SetYonFactor(1.f);
+    }
+#endif
     LoadKeyMapping();
     if (!PDInitScreenVars(pArgc, pArgv)) {
         FatalError(kFatalError_UnsupportedScreenDepth);
