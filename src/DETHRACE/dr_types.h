@@ -2989,6 +2989,20 @@ typedef struct tPedestrian_data {
     tPedestrian_sequence* sequences;
     tS3_sound_tag last_sound;
     br_pixelmap* colour_map;
+#if defined(DETHRACE_FIX_BUGS)
+    // Added by dethrace: fix_ped_spasm's pose-flicker guard (see
+    // PedSpasmGuardPose in pedestrn.c). Tracks the currently displayed
+    // (sequence, frame) pose, the one displayed before that, and how many
+    // ticks the current one has held, so a revert to the previous pose can
+    // be suppressed until it's held long enough to be a real transition
+    // rather than a flip-flop. Appended after all original fields so it
+    // doesn't disturb any existing field's offset.
+    tS8 spasm_held_sequence;
+    tS8 spasm_held_frame;
+    tS8 spasm_prev_sequence;
+    tS8 spasm_prev_frame;
+    tU16 spasm_pose_dwell;
+#endif
 } tPedestrian_data;
 
 typedef struct tPed_gib {

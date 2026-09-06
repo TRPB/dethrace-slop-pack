@@ -2326,6 +2326,62 @@ void SendPedestrian(tPedestrian_data* pPedestrian, int pIndex) {
     }
 }
 
+#if defined(DETHRACE_FIX_BUGS)
+// Minimum ticks a pose (current_sequence, current_frame) must hold before the
+// pedestrian is allowed to revert to whatever pose it displayed immediately
+// before that -- i.e. it can move on to new poses freely, but can't flip back
+// and forth between the same two.
+#define PEDSPASM_MIN_POSE_DWELL_TICKS 10
+
+// Single funnel point for pedestrian animation-flicker prevention: whatever
+// upstream system (danger-avoidance direction flips, waypoint pathing,
+// bearing-zone selection, or anything not yet found) is driving
+// current_sequence/current_frame, this only looks at the two values
+// themselves. Call once per tick, after MungePedestrianSequence and
+// MungePedestrianFrames have computed this tick's natural pose and before
+// MungePedModel renders it.
+static void PedSpasmGuardPose(tPedestrian_data* pPedestrian) {
+    int natural_sequence = pPedestrian->current_sequence;
+    int natural_frame = pPedestrian->current_frame;
+
+    if (natural_sequence == pPedestrian->spasm_held_sequence && natural_frame == pPedestrian->spasm_held_frame) {
+        // No change from what's already being shown.
+        if (pPedestrian->spasm_pose_dwell < 60000) {
+            pPedestrian->spasm_pose_dwell++;
+        }
+        return;
+    }
+
+    if (natural_sequence == pPedestrian->spasm_prev_sequence
+        && natural_frame == pPedestrian->spasm_prev_frame
+        && pPedestrian->spasm_pose_dwell < PEDSPASM_MIN_POSE_DWELL_TICKS) {
+        // This would revert to the pose held two ticks ago, and the current
+        // one hasn't held long enough to trust it's a real transition rather
+        // than a flip-flop -- suppress it and keep showing the current pose.
+        pPedestrian->current_sequence = pPedestrian->spasm_held_sequence;
+        pPedestrian->current_frame = pPedestrian->spasm_held_frame;
+        // MungePedestrianFrames already set colour_map from the natural
+        // (blocked) sequence/frame before this ran -- that's the pixelmap
+        // that actually gets drawn, and restoring current_sequence/frame
+        // alone doesn't touch it. Recompute it from the held pose so what's
+        // rendered matches the internal state we just restored.
+        pPedestrian->colour_map = pPedestrian->sequences[pPedestrian->spasm_held_sequence].frames[MAX(0, pPedestrian->spasm_held_frame)].pixelmap;
+        if (pPedestrian->spasm_pose_dwell < 60000) {
+            pPedestrian->spasm_pose_dwell++;
+        }
+        return;
+    }
+
+    // A genuine transition: either a pose not seen in the last two ticks, or
+    // a revert that's held long enough to be trusted.
+    pPedestrian->spasm_prev_sequence = pPedestrian->spasm_held_sequence;
+    pPedestrian->spasm_prev_frame = pPedestrian->spasm_held_frame;
+    pPedestrian->spasm_held_sequence = (tS8)natural_sequence;
+    pPedestrian->spasm_held_frame = (tS8)natural_frame;
+    pPedestrian->spasm_pose_dwell = 0;
+}
+#endif
+
 // IDA: void __usercall DoPedestrian(tPedestrian_data *pPedestrian@<EAX>, int pIndex@<EDX>)
 // FUNCTION: CARM95 0x004598e2
 void DoPedestrian(tPedestrian_data* pPedestrian, int pIndex) {
@@ -2401,6 +2457,19 @@ void DoPedestrian(tPedestrian_data* pPedestrian, int pIndex) {
                 }
             }
         }
+#if defined(DETHRACE_FIX_BUGS)
+        // Whatever mechanism drives it (danger-avoidance, waypoint pathing, bearing
+        // selection...), a pedestrian oscillating between two poses shows up here as
+        // current_sequence/current_frame alternating with whatever it displayed two
+        // ticks ago. Catch it generically at this single funnel point rather than
+        // chasing each individual cause: once a pose has held for
+        // PEDSPASM_MIN_POSE_DWELL_TICKS ticks, reverting to the one before it is
+        // allowed again; before that, the revert is suppressed and the current pose
+        // just holds a little longer.
+        if (harness_game_config.fix_ped_spasm) {
+            PedSpasmGuardPose(pPedestrian);
+        }
+#endif
         MungePedModel(pPedestrian);
         if (pPedestrian->current_action != pPedestrian->giblets_action) {
             CheckPedestrianDeathScenario(pPedestrian);
