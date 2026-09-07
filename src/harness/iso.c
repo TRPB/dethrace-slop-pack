@@ -17,6 +17,35 @@ static int iso_snprintf(char* buf, int count, const char* fmt, ...) {
     return ret;
 }
 #define snprintf iso_snprintf
+
+/* strtok_r is POSIX and this compiler has neither it nor strtok_s, so without
+ * a definition it is implicitly declared as returning int and its result gets
+ * truncated on assignment to char* (warning C4047). */
+static char* iso_strtok_r(char* str, const char* delim, char** saveptr) {
+    char* start;
+
+    if (str == NULL) {
+        str = *saveptr;
+    }
+    if (str == NULL) {
+        return NULL;
+    }
+    str += strspn(str, delim);
+    if (*str == '\0') {
+        *saveptr = NULL;
+        return NULL;
+    }
+    start = str;
+    str = strpbrk(start, delim);
+    if (str == NULL) {
+        *saveptr = NULL;
+    } else {
+        *str = '\0';
+        *saveptr = str + 1;
+    }
+    return start;
+}
+#define strtok_r iso_strtok_r
 #endif
 
 /* Raw Mode-1 sector layout: 12 sync + 4 header + 2048 data + 288 ECC */
@@ -31,6 +60,15 @@ static int iso_snprintf(char* buf, int count, const char* fmt, ...) {
 #include <direct.h>
 #include <io.h>
 #include <windows.h>
+/* struct _stat, _stat() and the S_IF* macros. Newer toolchains drag these in
+ * via the headers above, but MSVC 4.2 does not, so Iso_OpenIfFile fails to
+ * compile without them (C2079 on struct _stat, C2065 on S_IFMT/S_IFREG).
+ * sys/types.h has to come first, hence the formatting exemption -- sorting
+ * these alphabetically breaks the old compiler. */
+/* clang-format off */
+#include <sys/types.h>
+#include <sys/stat.h>
+/* clang-format on */
 #define iso_access(p) _access((p), 0)
 #define iso_mkdir(p)  _mkdir(p)
 #define iso_stat_t    struct _stat
