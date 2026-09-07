@@ -48,6 +48,7 @@ So consider this more of a mod that is just for fun: A wishlist for what I want 
 - TeleportOpponentToNearestLocation - Capped so it doesn't cause a crash in some maps
 - Car shadow flickering when car isn't moving (Deathrace bug)
 - Sky/horizon black band at some camera angles fixed via GL_DEPTH_CLAMP 
+- Roadhog and Hawk II have concave wheels on one side but not the other, fixed here when round wheels are enabled 
 
 Can all be tuned in dethrace.ini
 
@@ -106,6 +107,11 @@ CameraJudderFix = 1
 ; - Opponents
 ; - Powerups
 ExtendDrawDistance = 1
+
+
+; Enable wheel rounding (see readme for screenshot)
+; Turns blocky octagonal wheels into round wheels dynamically (mesh interpolated at runtime)
+RoundWheels = 1
 
 ; Prevent the pedestrian spasm bug that has bugged me since 1997 where a pedestrian will swap between the same two poses every two frames
 FixPedSpasm =1
