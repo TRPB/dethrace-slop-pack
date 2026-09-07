@@ -17,10 +17,14 @@ static int iso_snprintf(char* buf, int count, const char* fmt, ...) {
     return ret;
 }
 #define snprintf iso_snprintf
+#endif
 
-/* strtok_r is POSIX and this compiler has neither it nor strtok_s, so without
- * a definition it is implicitly declared as returning int and its result gets
- * truncated on assignment to char* (warning C4047). */
+/* strtok_r is POSIX and MSVC has never provided it at any version - only
+ * strtok_s, and not even that before VS2005. Without a definition it is
+ * implicitly declared as returning int (C4047 on the assignment to char*) and
+ * then fails to link (LNK2019, _strtok_r unresolved). Applies to every MSVC,
+ * not just the ancient one used for the reccmp build. */
+#if defined(_MSC_VER)
 static char* iso_strtok_r(char* str, const char* delim, char** saveptr) {
     char* start;
 
