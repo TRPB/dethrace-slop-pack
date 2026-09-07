@@ -7,8 +7,10 @@
 #include "harness/cue.h"
 #include "harness/iso.h"
 
+/* No <stdint.h> here: it is C99 and MSVC 4.2 has no such header. harness/iso.h
+ * above already supplies the fixed-width types portably, typedef'd by hand for
+ * that compiler and included from <stdint.h> everywhere else. */
 #include <ctype.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
