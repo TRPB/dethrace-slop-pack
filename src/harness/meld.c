@@ -1112,9 +1112,20 @@ static void meld_build_opponents(void) {
             // the corresponding slots in the merged output.
             if (gMeld_both_starting_cars) {
                 int g;
-                for (g = 1; g < harness_game_config.game_dirs_count && g < MELD_MAX_GAMES; g++) {
+                // The primary game's starting car is already in the list, as
+                // cars_available[0]; only the *other* games contribute extras.
+                // The primary is not necessarily game_dirs[0]: Meld_Init
+                // prepends the exe-dir overlay there when one exists, pushing
+                // the primary to index 1 (same convention as s_active_game).
+                // Starting this loop at 1 unconditionally treated the primary
+                // as a secondary game and listed its starting car twice.
+                int primary_game = (s_overlay_game_idx >= 0) ? 1 : 0;
+                for (g = 0; g < harness_game_config.game_dirs_count && g < MELD_MAX_GAMES; g++) {
                     char frank_car[256], anna_car[256];
                     int s;
+                    if (g == primary_game || g == s_overlay_game_idx) {
+                        continue;
+                    }
                     if (!meld_read_general_car_names(g, frank_car, anna_car)) {
                         continue;
                     }
@@ -1946,10 +1957,37 @@ void Meld_AddBothStartingCars(int frank, int* cars_avail, int* num_cars) {
         return;
     }
     for (i = 0; i < s_extra_start_counts[frank]; i++) {
-        if (*num_cars < 60) {
-            cars_avail[(*num_cars)++] = s_extra_start_slots[frank][i];
+        int slot = s_extra_start_slots[frank][i];
+        int already = 0;
+        int j;
+
+        // cars_avail already holds the primary game's starting car, and one
+        // car can be reachable more than one way; never list a slot twice.
+        for (j = 0; j < *num_cars; j++) {
+            if (cars_avail[j] == slot) {
+                already = 1;
+                break;
+            }
+        }
+        if (!already && *num_cars < 60) {
+            cars_avail[(*num_cars)++] = slot;
         }
     }
+}
+
+void Meld_Test_SetExtraStartSlots(int frank, const int* slots, int count) {
+    int i;
+
+    if (frank < 0 || frank > 1) {
+        return;
+    }
+    if (count > MELD_MAX_EXTRA_START) {
+        count = MELD_MAX_EXTRA_START;
+    }
+    for (i = 0; i < count; i++) {
+        s_extra_start_slots[frank][i] = slots[i];
+    }
+    s_extra_start_counts[frank] = count;
 }
 
 void Meld_Test_AddConflict(const char* basename) {

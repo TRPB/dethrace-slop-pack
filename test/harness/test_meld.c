@@ -320,6 +320,64 @@ void test_meld_dedup_placeholder_unique_car_kept(void) {
     TEST_ASSERT_TRUE(included[0]);
 }
 
+// MeldBothStartingCars adds each game's starting car to the change-car list.
+// cars_available[0] already holds the primary game's, so an extra slot equal to
+// it must not be appended again.
+//
+// This regressed because Meld_Init prepends the exe-dir overlay as
+// game_dirs[0], pushing the primary game to index 1; the merge assumed index 0
+// was the primary, treated it as a secondary game, and added its starting car
+// as an extra. Result was Eagle I twice and Eagle II once.
+static void run_add_both_starting(int frank, const int* extras, int extra_count,
+                                  int base_slot, int* cars, int* num_cars) {
+    int saved_active = gMeld_active;
+    int saved_both = gMeld_both_starting_cars;
+
+    gMeld_active = 1;
+    gMeld_both_starting_cars = 1;
+    Meld_Test_SetExtraStartSlots(frank, extras, extra_count);
+    *num_cars = 1;
+    cars[0] = base_slot;
+    Meld_AddBothStartingCars(frank, cars, num_cars);
+    gMeld_active = saved_active;
+    gMeld_both_starting_cars = saved_both;
+}
+
+void test_meld_both_starting_cars_no_duplicate_of_base(void) {
+    int extras[] = { 0, 31 }; // slot 0 is already cars_available[0]
+    int cars[60];
+    int num_cars;
+
+    run_add_both_starting(0, extras, 2, 0, cars, &num_cars);
+    TEST_ASSERT_EQUAL_INT(2, num_cars);
+    TEST_ASSERT_EQUAL_INT(0, cars[0]);
+    TEST_ASSERT_EQUAL_INT(31, cars[1]);
+}
+
+void test_meld_both_starting_cars_no_duplicate_among_extras(void) {
+    int extras[] = { 31, 31, 32 };
+    int cars[60];
+    int num_cars;
+
+    run_add_both_starting(0, extras, 3, 0, cars, &num_cars);
+    TEST_ASSERT_EQUAL_INT(3, num_cars);
+    TEST_ASSERT_EQUAL_INT(0, cars[0]);
+    TEST_ASSERT_EQUAL_INT(31, cars[1]);
+    TEST_ASSERT_EQUAL_INT(32, cars[2]);
+}
+
+void test_meld_both_starting_cars_distinct_slot_added(void) {
+    int extras[] = { 32 };
+    int cars[60];
+    int num_cars;
+
+    // Anna's base slot is 1, so an unrelated extra must still come through.
+    run_add_both_starting(1, extras, 1, 1, cars, &num_cars);
+    TEST_ASSERT_EQUAL_INT(2, num_cars);
+    TEST_ASSERT_EQUAL_INT(1, cars[0]);
+    TEST_ASSERT_EQUAL_INT(32, cars[1]);
+}
+
 void test_meld_suite(void) {
     UnitySetTestFile(__FILE__);
     RUN_TEST(test_meld_identity_line_preserved);
@@ -333,4 +391,7 @@ void test_meld_suite(void) {
     RUN_TEST(test_meld_dedup_variants_share_char_id);
     RUN_TEST(test_meld_dedup_placeholder_generic_car_dropped);
     RUN_TEST(test_meld_dedup_placeholder_unique_car_kept);
+    RUN_TEST(test_meld_both_starting_cars_no_duplicate_of_base);
+    RUN_TEST(test_meld_both_starting_cars_no_duplicate_among_extras);
+    RUN_TEST(test_meld_both_starting_cars_distinct_slot_added);
 }

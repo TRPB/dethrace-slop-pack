@@ -98,4 +98,8 @@ typedef struct {
 int Meld_Test_Dedup(const tMeld_Test_Oppo* in, int count,
                     int* out_included, int* out_char_ids);
 
+// Seed the extra starting-car slots that Meld_AddBothStartingCars appends,
+// standing in for the merge that normally computes them from the game dirs.
+void Meld_Test_SetExtraStartSlots(int frank, const int* slots, int count);
+
 #endif
