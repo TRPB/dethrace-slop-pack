@@ -22,6 +22,7 @@ So consider this more of a mod that is just for fun: A wishlist for what I want 
 - Opponent car level of detail always max + view distance increased 10x
 - Configureable tyre skid decal limits (blood trails, tyre marks and oil last significantly longer, normally the whole race)
 - Tyre skids/blood/oil decals are no longer hovering slightly above the ground
+- Wheel model rounding ([see below](#wheels))
 
 ## Features - Gameplay
 - Achievements
@@ -69,20 +70,23 @@ The following new options are availble under the `[Slop]` section in dethrace.in
 
 ```ini
 [Slop]
-; Meld all games listed in [Games] section, tracks, cars, etc from all games listed are available in the running instance
-; Where assets exist in multiple files (e.g. different loading screens) the first one listed takes priority
+; Meld all games listed in [Games] section, tracks, cars, etc from all games listed are available at once in-game
 Meld = 1 
 ; When Meld is enabled your chosen character gets both cars at the start of a new game
-; Max gets both Eagles, Die Anna gets both Hawks
-; When zero you only get the car from the first game listed in [Games]
+; When 1 Max gets both Eagles, Die Anna gets both Hawks
+; When 0 you only get the car from the first game listed in [Games]
 MeldBothStartingCars = 1
-; Meld multiplayer tracks that don't appear as normal races in the campaign
-; Unless you have multiplayer focussed mods you'll see both SUMO and COLISEUM 
+; Meld multiplayer tracks that don't normally appear as races in the campaign
+; This gives to SUMO and COLISEUM races during the campaign
 ; as arena races during the single player campaign
 MeldNetRaces = 1
 
+; Adds the other player character as an opponent in the campaign
+; If you play as Max you will see Anna as an opponent and visa-versa
+AddOtherPlayerCharacterAsOpponent = 1
+
 ; Enable achievements 
-Achievements=1
+Achievements = 1
 
 ; Custom resolution, aspect ratio is based on this, for 4:3 choose a 4:3 resolution (suggest window mode if you do this since your monitor probably won't support it natively)
 Width = 3840
@@ -116,6 +120,39 @@ StealworthyRankLimitDisable = 1
 ; Maximum number of skid/blood/oil decals before old ones are recycled (default 100, max 65535)
 NumSkids = 65535
 ```
+## Wheels
+
+This is not intended to be an upscaling project but one thing that does nag me is the very low poly octagonal wheels. With `RoundWheels=1` enabled, wheels are dynaimcally interpolated to 40 sided to appear a lot more round in game. This is a small, easy visual upgrade and entirely optional via the config switch.
+
+A secondary fix is that 3 splat pack vehicles were incorrectly modelled. Hawk II (Die Anna) and Roadhog (Helga Shwein) had incorrectly positioned wheels: Concave wheels on one side and flat on the other because the left hand wheel model was used for both left/right so the concave part of the wheel appeared on the inside of the car, not the outside. This option also flips the wheel so the conave parts are on the outside on both sides.
+
+This is not done by shipping new assets, the wheel geometry is upscaled (and flipped when needed) at runtime as the models load.
+
+![wheels](docs/wheels.png)
+
+It is better demonstrated in [video](https://youtu.be/Lx3Qb2YRpAk)
+
+## Bin/Cue iso file loading
+
+Support has been added for loading games directly from `.bin`/`.cue` CD rips. If you're old enough to have the original game disks (if you're reading this, how's your back?) you can rip them to `.bin`/`.cue` (or `.iso`, but don't do that, you'll lose the music) and point dethrace to the cd images files:
+
+```
+[Games]
+carma=/home/max/games/carma.cue
+splat=/home/max/games/splat.cue 
+xmasdemo=/home/max/games/xmasdemo
+```
+
+When doing this, run dethrace from a writable directory. Windows: copy to a folder somwhere along with the ini, then double click. Linux:
+
+```
+cd /home/max/games
+dethrace 
+```
+
+You'll probably also need the `DATA` folder shipped with this zip to provide the `SMOKE.PIX` needed for 3dfx since the original carmaggedon CD did not ship it. Place the `DATA` folder in the same location as the exe (Windows) or in the directory you are running dethrace from (Linux).
+
+Note: Some splat pack variants use `DEKEYMAP.TXT` insted of `KEYMAP.TXT` and do not work on their own. If you're using `Meld=1` it can be loaded but not standalone.  
 
 ## Modding
 
@@ -147,7 +184,9 @@ Do not report bugs related to these changes upstream on Deathrace, if you're uns
 This builds on the incredible [Dethrace](https://github.com/dethrace-labs/dethrace) project 
 
 The DATA dir ships the following:
-- Track images for the menu screen for the Sumo and Coliseum tracks by @TRPB
+- Track images for the menu screen for the Sumo and Coliseum tracks
+- Achievements menu item
+- Name images for Max Damage and Die Anna that appear when PlayerO
 
 
 
