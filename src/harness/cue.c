@@ -13,6 +13,23 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(_MSC_VER) && _MSC_VER <= 1020
+/* snprintf is C99; this compiler has only the unsafe printf family, so give it
+ * the same vsprintf-backed stand-in iso.c uses. Every call here writes into a
+ * CUE_MAX_PATH buffer from paths already bounded by the same limit. */
+#include <stdarg.h>
+static int cue_snprintf(char* buf, int count, const char* fmt, ...) {
+    int ret;
+    va_list ap;
+    va_start(ap, fmt);
+    ret = vsprintf(buf, fmt, ap);
+    va_end(ap);
+    (void)count;
+    return ret;
+}
+#define snprintf cue_snprintf
+#endif
+
 #ifdef _WIN32
 #include <io.h>
 #define cue_access(p) _access((p), 0)
@@ -158,8 +175,10 @@ static int cue_open_file(tCue_sheet* sheet, const char* dir, const char* bin_nam
     }
     idx = sheet->file_count;
     sheet->files[idx] = f;
-    strncpy(sheet->file_paths[idx], path, sizeof(sheet->file_paths[idx]) - 1);
-    sheet->file_paths[idx][sizeof(sheet->file_paths[idx]) - 1] = '\0';
+    /* snprintf, not strncpy: source and destination are both CUE_MAX_PATH, so
+     * gcc sees strncpy(dst, src, sizeof(dst) - 1) as a copy that may drop the
+     * terminator and rejects it under -Wstringop-truncation. */
+    snprintf(sheet->file_paths[idx], sizeof(sheet->file_paths[idx]), "%s", path);
     sheet->file_count++;
     return idx;
 }
