@@ -128,13 +128,13 @@ NumSkids = 65535
 ```
 ## Wheels
 
-This is not intended to be an upscaling project but one thing that does nag me is the very low poly octagonal wheels. With `RoundWheels=1` enabled, wheels are dynaimcally regenerated with 40 sids to appear a lot more round in game. This is a small, easy visual upgrade and entirely optional via the config switch.
+This is not intended to be an upscaling project but one thing that does nag me is the very low poly octagonal wheels. With `RoundWheels=1` enabled, wheels are dynamically regenerated with 40 sides to appear a lot more round in game. This is a small, easy visual upgrade and entirely optional via the config switch.
 
-A secondary fix is that 3 splat pack vehicles were incorrectly modelled. Hawk II (Die Anna) and Roadhog (Helga Shwein) had incorrectly positioned wheels: Concave wheels on one side and flat on the other because the left hand wheel model was used for both left/right so the concave part of the wheel appeared on the inside of the car, not the outside. This option also flips the wheel so the conave parts are on the outside on both sides.
+A secondary fix is that 2 splat pack vehicles were incorrectly modelled. Hawk II (Die Anna) and Roadhog (Helga Shwein) had incorrectly positioned wheels: Concave wheels on one side and flat on the other because a single wheel model is used for both sides and the engine draws it the same way round on each, so the concave part of the wheel appeared on the inside of the car rather than the outside. This option flips whichever side is wrong so the concave parts are on the outside on both sides.
 
-This is not done by shipping new assets, the wheel geometry is upscaled (and flipped when needed) at runtime as the models load.
+This is not done by shipping new assets, the wheel geometry is regenerated (and flipped when needed) at runtime as the models load.
 
-![wheels](docs/wheels.png)
+![wheels](docs/wheels.jpg)
 
 It is better demonstrated in [video](https://youtu.be/Lx3Qb2YRpAk)
 
