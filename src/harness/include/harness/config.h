@@ -81,6 +81,7 @@ typedef struct tHarness_game_config {
 
     int num_skids;
     int extend_draw_distance;
+    int round_wheels;
 
     int meld;
     int meld_both_starting_cars;

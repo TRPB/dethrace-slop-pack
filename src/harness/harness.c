@@ -307,6 +307,7 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.stealworthy_rank_limit_disable = 0;
     harness_game_config.num_skids = 100;
     harness_game_config.extend_draw_distance = 0;
+    harness_game_config.round_wheels = 0;
     // limit to 60 fps by default
     harness_game_config.fps = 60;
     // do not freeze timer
@@ -604,6 +605,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         }
     } else if (MATCH("Slop", "ExtendDrawDistance")) {
         harness_game_config.extend_draw_distance = (value[0] == '1');
+    } else if (MATCH("Slop", "RoundWheels")) {
+        harness_game_config.round_wheels = (value[0] == '1');
     } else if (MATCH("Slop", "FixPedSpasm")) {
         harness_game_config.fix_ped_spasm = (value[0] == '1');
     } else if (MATCH("Slop", "Meld")) {

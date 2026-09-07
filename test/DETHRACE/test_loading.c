@@ -11,6 +11,7 @@
 #include "common/utility.h"
 #include "common/world.h"
 #include "formats.h" // required for v11model
+#include "harness/config.h"
 
 void test_loading_GetCDPathFromPathsTxtFile() {
     REQUIRES_DATA_DIRECTORY();
@@ -231,6 +232,130 @@ void test_loading_LoadOpponentCar() {
     }
 }
 
+// NEWEAGLE's wheel (EAFLWHL.DAT) is 17 vertices / 30 faces: the standard
+// two 8-vertex rings plus a hub vertex that one end cap fans from. With 40
+// segments that regenerates to 2*40 ring vertices + 1 hub = 81, and
+// 2*40 tread + 40 (hub fan) + 38 (corner-pivot fan) = 158 faces.
+//
+// It also carries its texture as br_face::material (BE2WHEEL.MAT) rather
+// than on the wheel actor, which is the normal arrangement - Eagle's
+// WHEEL.DAT, with the material on the actor and none on its faces, is the
+// odd one out. Dropping those per-face materials while rebuilding the mesh
+// leaves the wheel completely untextured, so assert they survive.
+void test_loading_RoundWheels() {
+    REQUIRES_DATA_DIRECTORY();
+    tCar_spec car_spec;
+    tBrender_storage storage;
+    InitialiseStorageSpace(&storage, 50, 50, 50, 50);
+
+    int saved_round_wheels = harness_game_config.round_wheels;
+    harness_game_config.round_wheels = 1;
+    // eDriver_oppo, not eDriver_local_human: the local-human path also loads
+    // cockpit images, which dereferences gBack_screen - NULL in the headless
+    // test harness.
+    LoadCar("NEWEAGLE.TXT", eDriver_oppo, &car_spec, eFrankie, "playerName", &storage);
+    harness_game_config.round_wheels = saved_round_wheels;
+
+    TEST_ASSERT_NOT_NULL(car_spec.wheel_actors[0]);
+    br_model* wheel_model = car_spec.wheel_actors[0]->model;
+    TEST_ASSERT_NOT_NULL(wheel_model);
+    TEST_ASSERT_EQUAL_INT(81, wheel_model->nvertices);
+    TEST_ASSERT_EQUAL_INT(158, wheel_model->nfaces);
+
+    // The ring is built on the original octagon's inscribed circle, so it lies
+    // inside the original outline at every angle - and the planar UV fit, being
+    // a function of position, therefore stays inside the original's texture
+    // footprint too. Overshooting [0,1] would mean the regenerated wheel had
+    // grown beyond the mesh it replaced, which is what used to sink it into the
+    // road. Measured range across the shipped models is 0.0015 to 0.9985.
+    for (int i = 0; i < wheel_model->nvertices; i++) {
+        TEST_ASSERT_TRUE(wheel_model->vertices[i].map.v[0] >= 0.0 && wheel_model->vertices[i].map.v[0] <= 1.0);
+        TEST_ASSERT_TRUE(wheel_model->vertices[i].map.v[1] >= 0.0 && wheel_model->vertices[i].map.v[1] <= 1.0);
+    }
+
+    for (int i = 0; i < wheel_model->nfaces; i++) {
+        TEST_ASSERT_NOT_NULL(wheel_model->faces[i].material);
+    }
+}
+
+// Roadhog's rear wheel (RDRWHL.DAT, 32v/60f) is not a plain cylinder: it is
+// four concentric rings - tyre back, tyre front, rim, and the same rim radius
+// recessed inwards to dish it - so it goes through the general
+// surface-of-revolution generator rather than the two-ring one.
+//
+// 4 rings x 40 segments = 160 vertices; 6 band faces per segment x 40, plus
+// two 38-triangle caps = 316 faces.
+void test_loading_RoundWheels_Profile() {
+    REQUIRES_DATA_DIRECTORY();
+    tCar_spec car_spec;
+    tBrender_storage storage;
+    InitialiseStorageSpace(&storage, 50, 50, 50, 50);
+
+    int saved_round_wheels = harness_game_config.round_wheels;
+    harness_game_config.round_wheels = 1;
+    LoadCar("ROADHOG.TXT", eDriver_oppo, &car_spec, eFrankie, "playerName", &storage);
+    harness_game_config.round_wheels = saved_round_wheels;
+
+    // wheel_actors[2] is RLWHEEL.ACT - the fronts are ordinary cylinders.
+    TEST_ASSERT_NOT_NULL(car_spec.wheel_actors[2]);
+    br_model* wheel_model = car_spec.wheel_actors[2]->model;
+    TEST_ASSERT_NOT_NULL(wheel_model);
+    TEST_ASSERT_EQUAL_INT(160, wheel_model->nvertices);
+    TEST_ASSERT_EQUAL_INT(316, wheel_model->nfaces);
+
+    // See test_loading_RoundWheels: staying inside [0,1] is what says the
+    // regenerated wheel didn't grow beyond the mesh it replaced.
+    for (int i = 0; i < wheel_model->nvertices; i++) {
+        TEST_ASSERT_TRUE(wheel_model->vertices[i].map.v[0] >= 0.0 && wheel_model->vertices[i].map.v[0] <= 1.0);
+        TEST_ASSERT_TRUE(wheel_model->vertices[i].map.v[1] >= 0.0 && wheel_model->vertices[i].map.v[1] <= 1.0);
+    }
+
+    for (int i = 0; i < wheel_model->nfaces; i++) {
+        TEST_ASSERT_NOT_NULL(wheel_model->faces[i].material);
+        // Caps must not share a smoothing group with any band, or BRender
+        // averages the cap's normal into the tread's at every shared vertex.
+        TEST_ASSERT_TRUE(wheel_model->faces[i].smoothing != 0);
+    }
+}
+
+// Monster Masher's wheels (Monwhl.dat, 72v/76f) are a torus - a five-position
+// profile bulging out either side of the tread - with the tread band itself
+// texture-mapped around the wheel rather than projected onto it, one copy of
+// the texture per angular segment.
+//
+// 9 rings (5 profile positions, 4 of them duplicated to carry the tread's own
+// mapping) x 40 segments = 360 vertices; 8 band faces per segment x 40, plus
+// two 38-triangle caps = 396 faces.
+void test_loading_RoundWheels_Torus() {
+    REQUIRES_DATA_DIRECTORY();
+    tCar_spec car_spec;
+    tBrender_storage storage;
+    InitialiseStorageSpace(&storage, 50, 50, 50, 50);
+
+    int saved_round_wheels = harness_game_config.round_wheels;
+    harness_game_config.round_wheels = 1;
+    LoadCar("MONSTER.TXT", eDriver_oppo, &car_spec, eFrankie, "playerName", &storage);
+    harness_game_config.round_wheels = saved_round_wheels;
+
+    TEST_ASSERT_NOT_NULL(car_spec.wheel_actors[2]);
+    br_model* wheel_model = car_spec.wheel_actors[2]->model;
+    TEST_ASSERT_NOT_NULL(wheel_model);
+    TEST_ASSERT_EQUAL_INT(360, wheel_model->nvertices);
+    TEST_ASSERT_EQUAL_INT(396, wheel_model->nfaces);
+
+    for (int i = 0; i < wheel_model->nfaces; i++) {
+        TEST_ASSERT_NOT_NULL(wheel_model->faces[i].material);
+    }
+
+    // The tread's mapping deliberately runs outside [0,1] - it wraps the
+    // texture round the wheel eight times over, as the original does, rather
+    // than once per new segment. What it must not do is run away entirely.
+    for (int i = 0; i < wheel_model->nvertices; i++) {
+        TEST_ASSERT_TRUE(wheel_model->vertices[i].map.v[0] > -32.0 && wheel_model->vertices[i].map.v[0] < 32.0);
+        TEST_ASSERT_TRUE(wheel_model->vertices[i].map.v[1] > -32.0 && wheel_model->vertices[i].map.v[1] < 32.0);
+    }
+}
+
 void test_loading_suite() {
     UnitySetTestFile(__FILE__);
     RUN_TEST(test_loading_GetCDPathFromPathsTxtFile);
@@ -242,4 +367,7 @@ void test_loading_suite() {
     RUN_TEST(test_loading_ConvertPixToStripMap);
     RUN_TEST(test_loading_LoadCar);
     RUN_TEST(test_loading_LoadOpponentCar);
+    RUN_TEST(test_loading_RoundWheels);
+    RUN_TEST(test_loading_RoundWheels_Profile);
+    RUN_TEST(test_loading_RoundWheels_Torus);
 }

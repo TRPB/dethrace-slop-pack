@@ -70,6 +70,8 @@ target_sources(dethrace_obj PRIVATE
     common/racesumm.c
     common/replay.c
     common/loading.c
+    common/round_wheels.c
+    common/round_wheels.h
     common/piping.c
     common/powerup.c
     common/netgame.c

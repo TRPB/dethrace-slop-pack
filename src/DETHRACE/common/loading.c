@@ -33,6 +33,7 @@
 #include "pd/sys.h"
 #include "pedestrn.h"
 #include "racestrt.h"
+#include "round_wheels.h"
 #include "sound.h"
 #include "spark.h"
 #include "utility.h"
@@ -2470,6 +2471,8 @@ void LoadCar(char* pCar_name, tDriver pDriver, tCar_spec* pCar_spec, int pOwner,
     for (i = 0; i < COUNT_OF(gWheel_actor_names); i++) {
         pCar_spec->wheel_actors[i] = DRActorFindRecurse(pCar_spec->car_master_actor, gWheel_actor_names[i]);
     }
+    // Added by dethrace
+    RoundOffWheelActors(pCar_spec, pStorage_space);
     PossibleService();
     ReadMechanicsData(f, pCar_spec);
     PossibleService();
