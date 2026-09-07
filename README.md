@@ -110,7 +110,7 @@ ExtendDrawDistance = 1
 
 
 ; Enable wheel rounding (see readme for screenshot)
-; Turns blocky octagonal wheels into round wheels dynamically (mesh interpolated at runtime)
+; Turns blocky octagonal wheels into round wheels dynamically (mesh regenerated with more faces at runtime)
 RoundWheels = 1
 
 ; Prevent the pedestrian spasm bug that has bugged me since 1997 where a pedestrian will swap between the same two poses every two frames
@@ -128,7 +128,7 @@ NumSkids = 65535
 ```
 ## Wheels
 
-This is not intended to be an upscaling project but one thing that does nag me is the very low poly octagonal wheels. With `RoundWheels=1` enabled, wheels are dynaimcally interpolated to 40 sided to appear a lot more round in game. This is a small, easy visual upgrade and entirely optional via the config switch.
+This is not intended to be an upscaling project but one thing that does nag me is the very low poly octagonal wheels. With `RoundWheels=1` enabled, wheels are dynaimcally regenerated with 40 sids to appear a lot more round in game. This is a small, easy visual upgrade and entirely optional via the config switch.
 
 A secondary fix is that 3 splat pack vehicles were incorrectly modelled. Hawk II (Die Anna) and Roadhog (Helga Shwein) had incorrectly positioned wheels: Concave wheels on one side and flat on the other because the left hand wheel model was used for both left/right so the concave part of the wheel appeared on the inside of the car, not the outside. This option also flips the wheel so the conave parts are on the outside on both sides.
 
