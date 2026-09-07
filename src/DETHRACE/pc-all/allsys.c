@@ -11,6 +11,7 @@
 #include "harness/trace.h"
 #include "init.h"
 #include "input.h"
+#include "loading.h"
 #include "loadsave.h"
 #include "main.h"
 #include "pc-dos/scancodes.h"
@@ -300,7 +301,15 @@ void PDInitialiseSystem(void) {
     // Demo's do not ship with KEYBOARD.COK file
     if (harness_game_info.defines.ascii_table == NULL) {
         PathCat(the_path, gApplication_path, "KEYBOARD.COK");
+#if defined(DETHRACE_FIX_BUGS)
+        // A bare CUE/ISO/meld install has no real KEYBOARD.COK on disk -- it
+        // only exists inside the disc image/other game dir. Route through the
+        // harness VFS (Cue_FopenSingle/Meld_fopen) instead of a raw fopen so
+        // it's found the same way every other DATA file is.
+        f = DRfopen(the_path, "rb");
+#else
         f = fopen(the_path, "rb");
+#endif
         if (f == NULL) {
             PDFatalError("This .exe must have KEYBOARD.COK in the DATA folder.");
         }
