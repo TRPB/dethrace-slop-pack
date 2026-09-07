@@ -859,6 +859,154 @@ int DamageScrnExit(int* pCurrent_choice, int* pCurrent_mode) {
 }
 
 // IDA: void __usercall DamageScrnDraw(int pCurrent_choice@<EAX>, int pCurrent_mode@<EDX>)
+#ifdef DETHRACE_FIX_BUGS
+// Added by dethrace
+// Clips a line to a rectangle (Cohen-Sutherland), so the wreck selection box
+// can never be drawn outside the 3D view and over the surrounding panel.
+// Returns 0 if the line falls entirely outside.
+static int ClipLineToRect(float* pX0, float* pY0, float* pX1, float* pY1,
+    float pLeft, float pTop, float pRight, float pBottom) {
+    int guard;
+
+    for (guard = 0; guard < 8; guard++) {
+        int out0 = 0;
+        int out1 = 0;
+        int out_pick;
+        float x, y;
+        float* px;
+        float* py;
+
+        out0 |= (*pX0 < pLeft) ? 1 : 0;
+        out0 |= (*pX0 > pRight) ? 2 : 0;
+        out0 |= (*pY0 < pTop) ? 4 : 0;
+        out0 |= (*pY0 > pBottom) ? 8 : 0;
+        out1 |= (*pX1 < pLeft) ? 1 : 0;
+        out1 |= (*pX1 > pRight) ? 2 : 0;
+        out1 |= (*pY1 < pTop) ? 4 : 0;
+        out1 |= (*pY1 > pBottom) ? 8 : 0;
+
+        if ((out0 | out1) == 0) {
+            return 1;
+        }
+        if ((out0 & out1) != 0) {
+            return 0;
+        }
+        out_pick = out0 ? out0 : out1;
+        if (out_pick & 8) {
+            x = *pX0 + (*pX1 - *pX0) * (pBottom - *pY0) / (*pY1 - *pY0);
+            y = pBottom;
+        } else if (out_pick & 4) {
+            x = *pX0 + (*pX1 - *pX0) * (pTop - *pY0) / (*pY1 - *pY0);
+            y = pTop;
+        } else if (out_pick & 2) {
+            y = *pY0 + (*pY1 - *pY0) * (pRight - *pX0) / (*pX1 - *pX0);
+            x = pRight;
+        } else {
+            y = *pY0 + (*pY1 - *pY0) * (pLeft - *pX0) / (*pX1 - *pX0);
+            x = pLeft;
+        }
+        if (out_pick == out0) {
+            px = pX0;
+            py = pY0;
+        } else {
+            px = pX1;
+            py = pY1;
+        }
+        *px = x;
+        *py = y;
+    }
+    return 0;
+}
+
+// Added by dethrace
+// Draws a wireframe box around the selected wreck, matching what software mode
+// gets from BR_RSTYLE_BOUNDING_EDGES on sel_actor.
+//
+// glrend has no equivalent - BR_RSTYLE_BOUNDING_EDGES goes through BRT_LINE
+// immediate mode, which it doesn't implement - so the twelve edges of the
+// model's bounding box are transformed into camera space here, projected the
+// same way BRender's own camera matrix does (see BrCameraToScreenMatrix4 in
+// actsupt.c: scale = cot(fov/2), x scaled by scale/aspect, y by scale, w = -z),
+// and drawn as 2D lines. Every edge is clipped to the 3D view, so a wreck
+// drifting towards the edge of the panel no longer paints box edges across the
+// background.
+static void DrawWreckSelectionBox(br_actor* pWreck_actor, int pX, int pY, int pW, int pH, int pColour) {
+    br_camera* camera_data;
+    br_matrix34 to_camera;
+    br_bounds* bounds;
+    br_vector3 corner_cam[8];
+    float sx[8];
+    float sy[8];
+    int behind[8];
+    float scale;
+    float near_z;
+    int i;
+
+    if (pWreck_actor == NULL || pWreck_actor->model == NULL || gWreck_camera == NULL) {
+        return;
+    }
+    camera_data = (br_camera*)gWreck_camera->type_data;
+    if (camera_data == NULL || camera_data->aspect == 0.f) {
+        return;
+    }
+    bounds = &pWreck_actor->model->bounds;
+    BrActorToActorMatrix34(&to_camera, pWreck_actor, gWreck_camera);
+
+    scale = BR_COS((br_angle)(camera_data->field_of_view / 2)) / BR_SIN((br_angle)(camera_data->field_of_view / 2));
+    // Anything at or in front of the near plane can't be projected; keep a
+    // small margin so edges crossing it are dropped rather than flung across
+    // the screen by the divide.
+    near_z = camera_data->hither_z > 0.f ? camera_data->hither_z : 0.01f;
+
+    for (i = 0; i < 8; i++) {
+        br_vector3 corner;
+        float depth;
+
+        corner.v[0] = (i & 1) ? bounds->max.v[0] : bounds->min.v[0];
+        corner.v[1] = (i & 2) ? bounds->max.v[1] : bounds->min.v[1];
+        corner.v[2] = (i & 4) ? bounds->max.v[2] : bounds->min.v[2];
+        BrMatrix34ApplyP(&corner_cam[i], &corner, &to_camera);
+
+        // BRender cameras look down -z, so the distance in front is -z.
+        depth = -corner_cam[i].v[2];
+        behind[i] = depth < near_z;
+        if (behind[i]) {
+            sx[i] = 0.f;
+            sy[i] = 0.f;
+            continue;
+        }
+        sx[i] = pX + pW / 2.f + (corner_cam[i].v[0] * scale / camera_data->aspect) / depth * (pW / 2.f);
+        sy[i] = pY + pH / 2.f - (corner_cam[i].v[1] * scale) / depth * (pH / 2.f);
+    }
+
+    // The twelve edges are the corner pairs differing in exactly one axis bit.
+    for (i = 0; i < 8; i++) {
+        int axis;
+
+        for (axis = 0; axis < 3; axis++) {
+            int j = i | (1 << axis);
+            float x0, y0, x1, y1;
+
+            if (j == i) {
+                continue;
+            }
+            if (behind[i] || behind[j]) {
+                continue;
+            }
+            x0 = sx[i];
+            y0 = sy[i];
+            x1 = sx[j];
+            y1 = sy[j];
+            if (!ClipLineToRect(&x0, &y0, &x1, &y1, (float)pX, (float)pY,
+                    (float)(pX + pW - 1), (float)(pY + pH - 1))) {
+                continue;
+            }
+            BrPixelmapLine(gBack_screen, (int)x0, (int)y0, (int)x1, (int)y1, pColour);
+        }
+    }
+}
+#endif
+
 // FUNCTION: CARM95 0x00416671
 void DamageScrnDraw(int pCurrent_choice, int pCurrent_mode) {
     tU32 the_time;
@@ -1001,22 +1149,17 @@ void DamageScrnDraw(int pCurrent_choice, int pCurrent_mode) {
         }
 #ifdef DETHRACE_FIX_BUGS
         if (sel_actor != NULL) {
-            // glrend doesn't support BR_RSTYLE_BOUNDING_EDGES (BRT_LINE immediate mode);
-            // draw a 2D selection box on gBack_screen instead.
-            // Camera params fixed in BuildWrecks: FOV=55°, aspect=2, z=2.2
-            float z_dist = gWreck_camera->t.t.translate.t.v[2];
-            float scale = 1.f / 0.5206f; // 1/tan(27.5°)
-            float xscale = scale / (2.f * z_dist);
-            float yscale = scale / z_dist;
-            int rw = gCurrent_graf_data->wreck_render_w;
-            int rh = gCurrent_graf_data->wreck_render_h;
-            int box_cx = gCurrent_graf_data->wreck_render_x + rw / 2;
-            int box_cy = gCurrent_graf_data->wreck_render_y + rh / 2;
-            int sel_x = box_cx + (int)(gWreck_array[gWreck_selected].pos_x * 1.5f * xscale * (rw / 2.f));
-            int sel_y = box_cy + (int)(gWreck_array[gWreck_selected].pos_y * 1.2f * yscale * (rh / 2.f));
-            int hw = (int)(0.47f * xscale * (rw / 2.f)) + 3;
-            int hh = (int)(0.47f * yscale * (rh / 2.f)) + 3;
-            DrawRectangle(gBack_screen, sel_x - hw, sel_y - hh, sel_x + hw, sel_y + hh, 45);
+            // The real 3D bounding box software mode draws, projected and
+            // clipped to the view - see DrawWreckSelectionBox. This replaces an
+            // axis-aligned 2D rectangle placed from the wreck's grid position
+            // via hand-tuned fudge factors, which both mis-tracked the car as
+            // it span and spilled over the panel around the view.
+            DrawWreckSelectionBox(gWreck_array[gWreck_selected].actor,
+                gCurrent_graf_data->wreck_render_x,
+                gCurrent_graf_data->wreck_render_y,
+                gCurrent_graf_data->wreck_render_w,
+                gCurrent_graf_data->wreck_render_h,
+                45);
         }
 #endif
         if (sel_actor) {
