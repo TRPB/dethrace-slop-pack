@@ -64,7 +64,7 @@ typedef struct tRing_wrap {
 // teleports it to the near edge, which smears the whole texture across the
 // triangle that spans them (visible as a hard line across the wheel).
 // Values slightly outside [0,1] are fine - the renderer wraps them.
-static br_scalar LerpWrapped(br_scalar a, br_scalar b, br_scalar t) {
+static br_scalar WrapDelta(br_scalar a, br_scalar b) {
     br_scalar diff = b - a;
 
     if (diff > 0.5f) {
@@ -72,7 +72,11 @@ static br_scalar LerpWrapped(br_scalar a, br_scalar b, br_scalar t) {
     } else if (diff < -0.5f) {
         diff += 1.0f;
     }
-    return a + diff * t;
+    return diff;
+}
+
+static br_scalar LerpWrapped(br_scalar a, br_scalar b, br_scalar t) {
+    return a + WrapDelta(a, b) * t;
 }
 
 // Added by dethrace
@@ -285,9 +289,12 @@ static int SplitIntoRings(br_vertex* verts16, br_vertex* ring_a, br_vertex* ring
 //
 // pWrap is normally NULL, meaning "work the UVs out from the ring's own
 // samples". When non-NULL it supplies them instead - see tRing_wrap.
-static void BuildRoundRing(br_vertex* old_ring, int pRing_len, br_scalar x, const tRing_wrap* pWrap, br_vertex* pOut) {
+static void BuildRoundRing(br_vertex* old_ring, int pRing_len, br_scalar x, const tRing_wrap* pWrap, int pOut_count,
+    br_vertex* pOut) {
     br_scalar angle0;
     br_scalar orig_radius[MAX_ORIG_SEGMENTS];
+    double unwrapped_u[MAX_ORIG_SEGMENTS + 1];
+    double unwrapped_v[MAX_ORIG_SEGMENTS + 1];
     br_scalar inradius_scale;
     double coef_u[3];
     double coef_v[3];
@@ -299,6 +306,28 @@ static void BuildRoundRing(br_vertex* old_ring, int pRing_len, br_scalar x, cons
         orig_radius[i] = (br_scalar)sqrt(old_ring[i].p.v[1] * old_ring[i].p.v[1] + old_ring[i].p.v[2] * old_ring[i].p.v[2]);
     }
     is_affine = pWrap == NULL && TryAffineUV(old_ring, pRing_len, coef_u, coef_v);
+
+    // Running total of the ring's own texture coordinates, each step taking
+    // the short way round the 0/1 seam, so the sequence stays continuous
+    // instead of snapping back to each original sample's absolute value.
+    //
+    // Interpolating between neighbouring samples pairwise is not enough: on a
+    // wrapped mapping like Hammer's, u descends 0.125, 0.0 and then the next
+    // sample is 0.875. Taking the short way makes the run continue to -0.125,
+    // but the following pair re-anchors at +0.875, so one face has to sweep
+    // almost the whole texture backwards to get there. Accumulating instead
+    // lets the run carry on past the seam, and the renderer wraps it.
+    unwrapped_u[0] = (double)old_ring[0].map.v[0];
+    unwrapped_v[0] = (double)old_ring[0].map.v[1];
+    for (i = 1; i <= pRing_len; i++) {
+        int prev = i - 1;
+        int next = i % pRing_len;
+
+        unwrapped_u[i] = unwrapped_u[prev]
+            + (double)WrapDelta(old_ring[prev].map.v[0], old_ring[next].map.v[0]);
+        unwrapped_v[i] = unwrapped_v[prev]
+            + (double)WrapDelta(old_ring[prev].map.v[1], old_ring[next].map.v[1]);
+    }
 
     // Build the ring on the original polygon's *inscribed* circle, not through
     // its vertices.
@@ -320,12 +349,21 @@ static void BuildRoundRing(br_vertex* old_ring, int pRing_len, br_scalar x, cons
     // mesh, so nothing here moves the car or changes how it drives.
     inradius_scale = (br_scalar)cos(DR_PI / (double)pRing_len);
 
-    for (i = 0; i < ROUND_WHEEL_SEGMENTS; i++) {
+    for (i = 0; i < pOut_count; i++) {
         br_scalar frac_index = (br_scalar)i * ((br_scalar)pRing_len / (br_scalar)ROUND_WHEEL_SEGMENTS);
         int k = (int)frac_index;
         br_scalar t = frac_index - (br_scalar)k;
-        int k1 = (k + 1) % pRing_len;
-        br_scalar radius = (orig_radius[k] + (orig_radius[k1] - orig_radius[k]) * t) * inradius_scale;
+        int k1;
+        br_scalar radius;
+
+        // The closing vertex (i == ROUND_WHEEL_SEGMENTS) lands exactly on the
+        // last original sample; keep it in range and let t carry it there.
+        if (k >= pRing_len) {
+            k = pRing_len - 1;
+            t = 1.0f;
+        }
+        k1 = (k + 1) % pRing_len;
+        radius = (orig_radius[k] + (orig_radius[k1] - orig_radius[k]) * t) * inradius_scale;
         br_scalar angle = angle0 + (br_scalar)i * ((br_scalar)(2.0 * DR_PI) / (br_scalar)ROUND_WHEEL_SEGMENTS);
         br_scalar y = radius * (br_scalar)cos(angle);
         br_scalar z = radius * (br_scalar)sin(angle);
@@ -343,8 +381,8 @@ static void BuildRoundRing(br_vertex* old_ring, int pRing_len, br_scalar x, cons
             pOut[i].map.v[0] = (br_scalar)(coef_u[0] * (double)y + coef_u[1] * (double)z + coef_u[2]);
             pOut[i].map.v[1] = (br_scalar)(coef_v[0] * (double)y + coef_v[1] * (double)z + coef_v[2]);
         } else {
-            pOut[i].map.v[0] = LerpWrapped(old_ring[k].map.v[0], old_ring[k1].map.v[0], t);
-            pOut[i].map.v[1] = LerpWrapped(old_ring[k].map.v[1], old_ring[k1].map.v[1], t);
+            pOut[i].map.v[0] = (br_scalar)(unwrapped_u[k] + (unwrapped_u[k + 1] - unwrapped_u[k]) * (double)t);
+            pOut[i].map.v[1] = (br_scalar)(unwrapped_v[k] + (unwrapped_v[k + 1] - unwrapped_v[k]) * (double)t);
         }
         // Prelit vertex colour (index/red/grn/blu). A BR_MATF_PRELIT
         // material shades from these, so they can't be left as the zeroes
@@ -686,8 +724,8 @@ static int BuildTwoRingMesh(br_model* pModel, br_vertex** pOut_verts, int* pOut_
     // Wheel models are authored with X as the axle axis (true of every
     // wheel model in the game's data); ring_a/ring_b were split out by
     // geometry above.
-    BuildRoundRing(ring_a, ORIG_RING_VERTS, x_front, NULL, &new_verts[0]);
-    BuildRoundRing(ring_b, ORIG_RING_VERTS, x_back, NULL, &new_verts[n]);
+    BuildRoundRing(ring_a, ORIG_RING_VERTS, x_front, NULL, n, &new_verts[0]);
+    BuildRoundRing(ring_b, ORIG_RING_VERTS, x_back, NULL, n, &new_verts[n]);
     // Copy the hub vertices verbatim - in particular do NOT snap their x
     // onto the ring's plane. Several wheels (e.g. Splat Pack Eagle's
     // EAFLWHL.DAT, rings at x=+/-0.0417 with its hub at x=-0.0028) recess
@@ -1475,6 +1513,7 @@ static int BuildRevolutionMeshInner(br_model* pModel, tRev_build* pB, tRev_scrat
     br_face* new_faces;
     int new_nvertices, new_nfaces;
     int npoles_out = 0;
+    int ring_stride;
     int slot, i, j, b, f;
 
     if (pModel->nvertices < 16 || pModel->nfaces < 16) {
@@ -1499,7 +1538,16 @@ static int BuildRevolutionMeshInner(br_model* pModel, tRev_build* pB, tRev_scrat
     AssignBandSmoothingGroups(pB);
     FindWrappedRings(pModel, pB);
 
-    new_nvertices = a->nslots * n + a->npoles;
+    // Each ring gets one extra vertex closing the loop, sitting exactly on top
+    // of its first but carrying the texture coordinates the mapping has reached
+    // after a full turn. Without it a wrapped mapping - which advances by a
+    // whole texture repeat per revolution - has nowhere to put that advance,
+    // and the one face joining the last vertex back to the first has to sweep
+    // the entire texture backwards. The original meshes carry the same seam
+    // duplicates for the same reason (Hammer's v16/v17, Monster's duplicate
+    // rings); collapsing the ring to a bare loop threw them away.
+    ring_stride = n + 1;
+    new_nvertices = a->nslots * ring_stride + a->npoles;
     new_nfaces = pB->nbands * n;
     for (slot = 0; slot < a->nslots; slot++) {
         if (pB->cap[slot].nfaces != 0) {
@@ -1522,7 +1570,7 @@ static int BuildRevolutionMeshInner(br_model* pModel, tRev_build* pB, tRev_scrat
             samples[i] = pModel->vertices[a->orbit[slot * a->nslices + i]];
         }
         BuildRoundRing(samples, a->nslices, samples[0].p.v[0], pB->has_wrap[slot] ? &pB->wrap[slot] : NULL,
-            &new_verts[slot * n]);
+            ring_stride, &new_verts[slot * ring_stride]);
     }
     // Hub vertices are copied verbatim, x included: several wheels recess
     // theirs inwards and that offset is exactly what dishes the wheel face.
@@ -1530,7 +1578,7 @@ static int BuildRevolutionMeshInner(br_model* pModel, tRev_build* pB, tRev_scrat
         if (a->slice_of[i] >= 0) {
             continue;
         }
-        pB->pole_out[i] = a->nslots * n + npoles_out;
+        pB->pole_out[i] = a->nslots * ring_stride + npoles_out;
         new_verts[pB->pole_out[i]] = pModel->vertices[i];
         npoles_out++;
     }
@@ -1541,8 +1589,10 @@ static int BuildRevolutionMeshInner(br_model* pModel, tRev_build* pB, tRev_scrat
             // Carries the original material, prelit colours and flags over.
             new_faces[f] = pB->band[b].face;
             for (j = 0; j < 3; j++) {
+                // No wrap on the segment index: i + offset reaches n at the
+                // last segment, which is the closing vertex added above.
                 new_faces[f].vertices[j]
-                    = (br_uint_16)(pB->band[b].slot[j] * n + (i + pB->band[b].offset[j]) % n);
+                    = (br_uint_16)(pB->band[b].slot[j] * ring_stride + i + pB->band[b].offset[j]);
             }
             new_faces[f].smoothing = (br_uint_16)(1 << pB->band[b].group);
             f++;
@@ -1553,10 +1603,10 @@ static int BuildRevolutionMeshInner(br_model* pModel, tRev_build* pB, tRev_scrat
             continue;
         }
         if (pB->cap[slot].pole >= 0) {
-            AppendCapFan(new_faces, &f, pB->pole_out[pB->cap[slot].pole], slot * n, n, 0, n, new_verts,
+            AppendCapFan(new_faces, &f, pB->pole_out[pB->cap[slot].pole], slot * ring_stride, n, 0, n, new_verts,
                 (br_scalar)pB->cap[slot].outward, 0x8000, &pB->cap[slot].face);
         } else {
-            AppendCapFan(new_faces, &f, slot * n, slot * n, n, 1, n - 2, new_verts,
+            AppendCapFan(new_faces, &f, slot * ring_stride, slot * ring_stride, n, 1, n - 2, new_verts,
                 (br_scalar)pB->cap[slot].outward, 0x8000, &pB->cap[slot].face);
         }
     }

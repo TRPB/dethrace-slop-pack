@@ -283,8 +283,11 @@ void test_loading_RoundWheels() {
 // recessed inwards to dish it - so it goes through the general
 // surface-of-revolution generator rather than the two-ring one.
 //
-// 4 rings x 40 segments = 160 vertices; 6 band faces per segment x 40, plus
-// two 38-triangle caps = 316 faces.
+// 4 rings x 41 vertices = 164; 6 band faces per segment x 40, plus two
+// 38-triangle caps = 316 faces. The rings carry 41 vertices for 40 segments
+// because each is cut open at a seam - the last vertex sits on the first but
+// holds the texture coordinates a wrapped mapping has wound on to after a full
+// turn. 40 posts would only close a loop that never winds.
 void test_loading_RoundWheels_Profile() {
     REQUIRES_DATA_DIRECTORY();
     tCar_spec car_spec;
@@ -300,7 +303,7 @@ void test_loading_RoundWheels_Profile() {
     TEST_ASSERT_NOT_NULL(car_spec.wheel_actors[2]);
     br_model* wheel_model = car_spec.wheel_actors[2]->model;
     TEST_ASSERT_NOT_NULL(wheel_model);
-    TEST_ASSERT_EQUAL_INT(160, wheel_model->nvertices);
+    TEST_ASSERT_EQUAL_INT(164, wheel_model->nvertices);
     TEST_ASSERT_EQUAL_INT(316, wheel_model->nfaces);
 
     // See test_loading_RoundWheels: staying inside [0,1] is what says the
@@ -324,8 +327,8 @@ void test_loading_RoundWheels_Profile() {
 // the texture per angular segment.
 //
 // 9 rings (5 profile positions, 4 of them duplicated to carry the tread's own
-// mapping) x 40 segments = 360 vertices; 8 band faces per segment x 40, plus
-// two 38-triangle caps = 396 faces.
+// mapping) x 41 vertices = 369; 8 band faces per segment x 40, plus two
+// 38-triangle caps = 396 faces. See the Profile test on why 41 per ring.
 void test_loading_RoundWheels_Torus() {
     REQUIRES_DATA_DIRECTORY();
     tCar_spec car_spec;
@@ -340,7 +343,7 @@ void test_loading_RoundWheels_Torus() {
     TEST_ASSERT_NOT_NULL(car_spec.wheel_actors[2]);
     br_model* wheel_model = car_spec.wheel_actors[2]->model;
     TEST_ASSERT_NOT_NULL(wheel_model);
-    TEST_ASSERT_EQUAL_INT(360, wheel_model->nvertices);
+    TEST_ASSERT_EQUAL_INT(369, wheel_model->nvertices);
     TEST_ASSERT_EQUAL_INT(396, wheel_model->nfaces);
 
     for (int i = 0; i < wheel_model->nfaces; i++) {
