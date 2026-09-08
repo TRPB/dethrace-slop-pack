@@ -75,10 +75,6 @@ static br_scalar WrapDelta(br_scalar a, br_scalar b) {
     return diff;
 }
 
-static br_scalar LerpWrapped(br_scalar a, br_scalar b, br_scalar t) {
-    return a + WrapDelta(a, b) * t;
-}
-
 // Added by dethrace
 static br_uint_8 LerpU8(br_uint_8 a, br_uint_8 b, br_scalar t) {
     return (br_uint_8)((br_scalar)a + ((br_scalar)b - (br_scalar)a) * t);
@@ -355,6 +351,9 @@ static void BuildRoundRing(br_vertex* old_ring, int pRing_len, br_scalar x, cons
         br_scalar t = frac_index - (br_scalar)k;
         int k1;
         br_scalar radius;
+        br_scalar angle;
+        br_scalar y;
+        br_scalar z;
 
         // The closing vertex (i == ROUND_WHEEL_SEGMENTS) lands exactly on the
         // last original sample; keep it in range and let t carry it there.
@@ -364,9 +363,9 @@ static void BuildRoundRing(br_vertex* old_ring, int pRing_len, br_scalar x, cons
         }
         k1 = (k + 1) % pRing_len;
         radius = (orig_radius[k] + (orig_radius[k1] - orig_radius[k]) * t) * inradius_scale;
-        br_scalar angle = angle0 + (br_scalar)i * ((br_scalar)(2.0 * DR_PI) / (br_scalar)ROUND_WHEEL_SEGMENTS);
-        br_scalar y = radius * (br_scalar)cos(angle);
-        br_scalar z = radius * (br_scalar)sin(angle);
+        angle = angle0 + (br_scalar)i * ((br_scalar)(2.0 * DR_PI) / (br_scalar)ROUND_WHEEL_SEGMENTS);
+        y = radius * (br_scalar)cos(angle);
+        z = radius * (br_scalar)sin(angle);
 
         pOut[i].p.v[0] = x;
         pOut[i].p.v[1] = y;
@@ -1689,7 +1688,7 @@ static int BuildRevolutionMesh(br_model* pModel, br_vertex** pOut_verts, int* pO
 // of the texture and back on at the other. Hammer's HMRWHEEL.DAT has two, and
 // they are what stop its slices holding equal numbers of vertices. Dropping
 // one copy's coordinates is safe here because every ring's mapping is
-// regenerated from its own samples afterwards, and LerpWrapped already takes
+// regenerated from its own samples afterwards, and WrapDelta already takes
 // the short way round the seam - the duplicate carries no information the
 // generators need. It is a second-chance measure all the same, applied only to
 // models nothing else could make sense of.
