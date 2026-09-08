@@ -3,7 +3,15 @@
 
 #include <stddef.h>
 #if defined(_MSC_VER) && _MSC_VER <= 1020
+/* Shares HARNESS_STDINT_SHIM with iso.h - see the note there. meld.c pulls in
+ * both headers, and redefining a typedef is an error before C11. */
+#ifndef HARNESS_STDINT_SHIM
+#define HARNESS_STDINT_SHIM
+typedef unsigned char uint8_t;
+typedef unsigned short uint16_t;
+typedef unsigned long uint32_t;
 typedef unsigned long uint64_t;
+#endif
 #else
 #include <stdint.h>
 #endif

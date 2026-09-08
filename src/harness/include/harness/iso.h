@@ -2,9 +2,17 @@
 #define HARNESS_ISO_H
 
 #if defined(_MSC_VER) && _MSC_VER <= 1020
-typedef unsigned char  uint8_t;
-typedef unsigned long  uint32_t;
-typedef unsigned long  uint64_t;
+/* No <stdint.h> before C99. Guarded by its own macro rather than the header's,
+ * because meld.h carries the same block and a translation unit can pull in
+ * both (meld.c includes meld.h directly and iso.h via meld_internal.h) -
+ * redefining a typedef is an error before C11. */
+#ifndef HARNESS_STDINT_SHIM
+#define HARNESS_STDINT_SHIM
+typedef unsigned char uint8_t;
+typedef unsigned short uint16_t;
+typedef unsigned long uint32_t;
+typedef unsigned long uint64_t;
+#endif
 #else
 #include <stdint.h>
 #endif
