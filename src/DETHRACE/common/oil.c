@@ -269,6 +269,29 @@ void EnsureGroundDetailVisible(br_vector3* pNew_pos, br_vector3* pGround_normal,
 void MungeOilsHeightAboveGround(tOil_spill_info* pOil) {
 
     EnsureGroundDetailVisible(&pOil->actor->t.t.look_up.t, &pOil->actor->t.t.look_up.up, &pOil->pos);
+#if defined(DETHRACE_FIX_BUGS)
+    // Lift the spill clear of the road along the surface normal.
+    //
+    // EnsureGroundDetailVisible used to lerp ground detail towards the camera,
+    // which lifted it by an amount that grew with camera distance. Dropping
+    // that (so marks stopped floating through the wheels) left it sitting
+    // exactly on the ground. Skid marks got a replacement lift in StretchMark,
+    // which scales the transform's normal row so their y=1.0 model vertices
+    // stand off the surface - but an oil spill's vertices are flat at y=0, so
+    // that row does nothing for them and the quad ends up coplanar with the
+    // road, z-fighting it. Most visible on the spills a wrecked opponent
+    // leaves behind.
+    //
+    // look_up.up aliases mat.m[1], which is the ground normal this actor was
+    // built around, so this offsets along the surface rather than world Y and
+    // stays flush on slopes. EnsureGroundDetailVisible writes an absolute
+    // position every frame, so the offset cannot accumulate.
+    //
+    // Slightly more than the 0.005 skid marks use: an oil spill reads as a
+    // film lying on top of the road and anything already marked on it, and the
+    // gap keeps the two decals from fighting each other where they overlap.
+    BrVector3AccumulateScale(&pOil->actor->t.t.look_up.t, &pOil->actor->t.t.look_up.up, BR_SCALAR(0.006));
+#endif
 }
 
 // IDA: void __usercall MungeIndexedOilsHeightAboveGround(int pIndex@<EAX>)
