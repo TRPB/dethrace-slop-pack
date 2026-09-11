@@ -102,6 +102,9 @@ int gMeld_use_net_starts = 0;
 int s_game_method[MELD_MAX_GAMES];
 // Whether each game contributed at least one unique race (for PARTSHOP).
 static int s_game_contributed[MELD_MAX_GAMES];
+// Whether a game dir carries its own redraw of the shared cockpit art.
+// See meld_detect_alt_cockpits.
+static int s_game_alt_cockpit[MELD_MAX_GAMES];
 // Per-game ISO backing (see meld_internal.h).
 tIso_image* s_iso_backing[MELD_MAX_GAMES];
 tCue_sheet* s_cue_backing[MELD_MAX_GAMES];
@@ -379,6 +382,131 @@ static void meld_build_conflict_map(void) {
     }
 
     qsort(s_conflict_basenames, s_conflict_count, MELD_CONFLICT_NAMELEN, meld_conflict_cmp);
+}
+
+// ---------------------------------------------------------------------------
+// The one cockpit two games draw differently
+// ---------------------------------------------------------------------------
+//
+// The Splat Pack redrew the Eagle's interior and kept the filenames, so
+// CKPT80F/L/R mean one thing in Carmageddon and another in Splat. Every other
+// cockpit is byte-identical across the games that ship it.
+//
+// Widened art has to honour that split and cannot do it the usual way: the
+// overlay is searched before the game dirs precisely so our assets win, which
+// would hand one game's Eagle to both. So the widened Splat art ships under a
+// suffixed name -- CKPT80L_S.PIX beside CKPT80L.PIX -- and LoadCar asks for it
+// first. If the suffixed file is not there the load falls back to the plain
+// name, so shipping nothing changes nothing.
+//
+// The choice is made per CAR, not per active game. Thirteen Splat cars point
+// at CKPT80 -- 333, AMBLANCE, BUGGIT, JAQUES, MINI, NEWEAGLE, ROADHOG, SLED,
+// SUBFRAME, SZ, TOOHORSE, XJ220, BLKEAGLE -- against six in Carmageddon, and
+// meld happily runs a Splat car in a Carmageddon event, where s_active_game is
+// the event's game and not the car's. Only the car's own definition gets all
+// nineteen right.
+//
+// Which dir is "the Splat one" is decided by comparing the art, not by
+// matching a directory name, because that name is whatever the user put in
+// [Games]. A dir qualifies when its own copy of a shared cockpit differs from
+// the primary game's. Only CARSPLAT does: CARMA, SPLATDEMO and XMASDEMO all
+// carry the Carmageddon art under these names.
+#define MELD_ALT_COCKPIT_SUFFIX "_S"
+static const char* kAlt_cockpit_names[] = {
+    "CKPT80F.PIX", "CKPT80L.PIX", "CKPT80R.PIX", NULL
+};
+
+// CKPT80L.PIX -> CKPT80L_S.PIX. Empty output if it will not fit.
+void meld_alt_cockpit_tail(const char* tail, char* out, size_t len) {
+    const char* dot = strrchr(tail, '.');
+    size_t stem;
+
+    out[0] = '\0';
+    if (dot == NULL) {
+        return;
+    }
+    stem = (size_t)(dot - tail);
+    if (stem + strlen(MELD_ALT_COCKPIT_SUFFIX) + strlen(dot) + 1 > len) {
+        return;
+    }
+    memcpy(out, tail, stem);
+    out[stem] = '\0';
+    strcat(out, MELD_ALT_COCKPIT_SUFFIX);
+    strcat(out, dot);
+}
+
+static void meld_detect_alt_cockpits(void) {
+    int gc = harness_game_config.game_dirs_count;
+    int primary = (s_overlay_game_idx >= 0) ? 1 : 0;
+    char rel[MAX_PATH];
+    int g, i;
+
+    for (g = 0; g < MELD_MAX_GAMES; g++) {
+        s_game_alt_cockpit[g] = 0;
+    }
+    if (primary >= gc) {
+        return;
+    }
+    for (g = 0; g < gc && g < MELD_MAX_GAMES; g++) {
+        if (g == primary || g == s_overlay_game_idx) {
+            continue;
+        }
+        for (i = 0; kAlt_cockpit_names[i] != NULL; i++) {
+            meld_join(rel, sizeof(rel), "DATA/64X48X8/PIXELMAP", kAlt_cockpit_names[i]);
+            if (meld_dir_file_exists(g, rel) && meld_dir_file_exists(primary, rel)
+                    && !meld_dir_files_same(g, rel, primary, rel)) {
+                s_game_alt_cockpit[g] = 1;
+                LOG_INFO2("Meld: game dir %d has its own cockpit art", g);
+                break;
+            }
+        }
+    }
+}
+
+// Which game dir a car's definition comes from. The overlay is skipped: a car
+// file dropped next to the exe says nothing about which game the car belongs
+// to. Active game first, matching Meld_fopen, so a car present in both follows
+// the event it is racing in.
+static int meld_car_home_game(const char* car_name) {
+    char rel[MAX_PATH];
+    int gc = harness_game_config.game_dirs_count;
+    int g;
+
+    meld_join(rel, sizeof(rel), "DATA/CARS", car_name);
+
+    if (s_active_game >= 0 && s_active_game < gc && s_active_game < MELD_MAX_GAMES
+            && s_active_game != s_overlay_game_idx
+            && meld_dir_file_exists(s_active_game, rel)) {
+        return s_active_game;
+    }
+    for (g = 0; g < gc && g < MELD_MAX_GAMES; g++) {
+        if (g == s_overlay_game_idx) {
+            continue;
+        }
+        if (meld_dir_file_exists(g, rel)) {
+            return g;
+        }
+    }
+    return -1;
+}
+
+int Meld_CockpitVariantName(const char* pCar_name, const char* pPix_name,
+    char* pOut, size_t pOut_len) {
+    int home;
+
+    if (pOut == NULL || pOut_len == 0) {
+        return 0;
+    }
+    pOut[0] = '\0';
+    if (!gMeld_active || pCar_name == NULL || pPix_name == NULL) {
+        return 0;
+    }
+    home = meld_car_home_game(pCar_name);
+    if (home < 0 || !s_game_alt_cockpit[home]) {
+        return 0;
+    }
+    meld_alt_cockpit_tail(pPix_name, pOut, pOut_len);
+    return pOut[0] != '\0';
 }
 
 // ---------------------------------------------------------------------------
@@ -1509,6 +1637,7 @@ void Meld_Init(void) {
     meld_build_music();
 
     meld_build_conflict_map();
+    meld_detect_alt_cockpits();
 
     s_active_game = (s_overlay_game_idx >= 0) ? 1 : 0;
     gMeld_active = 1;
@@ -1865,6 +1994,26 @@ FILE* Meld_fopen(const char* path, const char* mode) {
             }
             meld_relative_tail(real_path, tail, sizeof(tail));
             return meld_dir_fopen(n_game, tail, mode);
+        }
+    }
+
+    // 0. The overlay wins over everything on disk.
+    //
+    //    This has to happen before the as-is open below, not just at the head
+    //    of the fan-out in step 3. gApplication_path points at the primary
+    //    game, so "as-is" resolves there -- meaning an overlay file was only
+    //    ever reached for assets the primary game happens not to have, or ones
+    //    the conflict map covers. And that map scans seven top-level asset
+    //    dirs, not the per-resolution ones a widescreen cockpit lives in, so
+    //    overriding e.g. DATA/64X48X8/CARS/EAGLE.TXT silently did nothing.
+    if (!writing && s_overlay_game_idx >= 0) {
+        char tail[MAX_PATH];
+        FILE* f;
+
+        meld_relative_tail(path, tail, sizeof(tail));
+        f = meld_dir_fopen(s_overlay_game_idx, tail, mode);
+        if (f != NULL) {
+            return f;
         }
     }
 

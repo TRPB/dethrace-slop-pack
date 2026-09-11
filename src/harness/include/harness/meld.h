@@ -55,6 +55,16 @@ int Meld_OpponentCharacterId(int opponent_index);
 // active game dir, then all [Games] dirs in order.
 FILE* Meld_fopen(const char* path, const char* mode);
 
+// The Splat Pack redrew the Eagle's interior under Carmageddon's cockpit
+// filenames, so CKPT80F/L/R mean different art in each game. Our widened Splat
+// copies ship suffixed (CKPT80L_S.PIX). Given a car and the cockpit image its
+// definition asks for, writes the suffixed name to pOut and returns 1 when the
+// car belongs to a game carrying that redraw; 0 otherwise. Callers try the
+// returned name first and fall back to the plain one, so a missing file is
+// harmless.
+int Meld_CockpitVariantName(const char* pCar_name, const char* pPix_name,
+    char* pOut, size_t pOut_len);
+
 // Music pool support.
 int Meld_MusicAvailable(void);
 void Meld_ResolveMusicPath(int track, char* out, size_t len);

@@ -1999,12 +1999,28 @@ void LoadCar(char* pCar_name, tDriver pDriver, tCar_spec* pCar_spec, int pOwner,
                     int ws_offset = gGraf_specs[gGraf_spec_index].phys_width - gGraf_specs[gGraf_spec_index].total_width;
                     if (ws_offset > 0) {
                         tPath_name uw_path;
-                        PathCat(uw_path, gApplication_path, "11X48X8");
-                        PathCat(uw_path, uw_path, "PIXELMAP");
-                        PathCat(uw_path, uw_path, str);
-                        AllowOpenToFail();
-                        the_image = DRPixelmapLoad(uw_path);
-                        DoNotAllowOpenToFail();
+                        char variant_name[64];
+                        // The Splat Pack redrew the Eagle's interior under
+                        // Carmageddon's cockpit filenames, so the same
+                        // CKPT80F.PIX means different art depending on which
+                        // game the car comes from. Widened Splat copies ship
+                        // suffixed; ask for that first and fall back.
+                        if (Meld_CockpitVariantName(pCar_name, str, variant_name, sizeof(variant_name))) {
+                            PathCat(uw_path, gApplication_path, "11X48X8");
+                            PathCat(uw_path, uw_path, "PIXELMAP");
+                            PathCat(uw_path, uw_path, variant_name);
+                            AllowOpenToFail();
+                            the_image = DRPixelmapLoad(uw_path);
+                            DoNotAllowOpenToFail();
+                        }
+                        if (the_image == NULL) {
+                            PathCat(uw_path, gApplication_path, "11X48X8");
+                            PathCat(uw_path, uw_path, "PIXELMAP");
+                            PathCat(uw_path, uw_path, str);
+                            AllowOpenToFail();
+                            the_image = DRPixelmapLoad(uw_path);
+                            DoNotAllowOpenToFail();
+                        }
                         if (the_image != NULL && j == 0) {
                             pCar_spec->cockpit_pixel_width = the_image->width;
                         }

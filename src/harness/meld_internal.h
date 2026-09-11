@@ -104,6 +104,9 @@ extern tCue_sheet* s_cue_backing[MELD_MAX_GAMES];
 // ---------------------------------------------------------------------------
 
 void  meld_join(char* dest, size_t len, const char* a, const char* b);
+// Shared cockpit art that one game redraws under the same filename; the
+// widened Splat copy ships suffixed. See meld.c.
+void  meld_alt_cockpit_tail(const char* tail, char* out, size_t len);
 FILE* meld_open_data(int game_idx, const char* name, const char* mode);
 // Open rel_path (e.g. "DATA/CARS/POLICE.TXT") under game_dirs[game_idx]:
 // resolves inside s_iso_backing[game_idx] if that game dir is ISO-backed,

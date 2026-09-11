@@ -1,4 +1,5 @@
 #include "harness/meld.h"
+#include "../../src/harness/meld_internal.h"
 #include "common/loading.h"
 #include "common/utility.h"
 #include "tests.h"
@@ -378,6 +379,36 @@ void test_meld_both_starting_cars_distinct_slot_added(void) {
     TEST_ASSERT_EQUAL_INT(32, cars[1]);
 }
 
+
+// ---------------------------------------------------------------------------
+// Shared cockpit art. The Splat Pack redrew CKPT80F/L/R and kept the
+// filenames, so the widened Splat copies ship suffixed and are picked by
+// rewriting the name. Every other cockpit is identical across games and must
+// pass through untouched.
+// ---------------------------------------------------------------------------
+
+static void test_meld_alt_cockpit_tail(void) {
+    char out[256];
+
+    meld_alt_cockpit_tail("DATA/11X48X8/PIXELMAP/CKPT80L.PIX", out, sizeof(out));
+    TEST_ASSERT_EQUAL_STRING("DATA/11X48X8/PIXELMAP/CKPT80L_S.PIX", out);
+
+    // the suffix goes before the extension, not on the end
+    meld_alt_cockpit_tail("CKPT80F.PIX", out, sizeof(out));
+    TEST_ASSERT_EQUAL_STRING("CKPT80F_S.PIX", out);
+
+    // a dot in a directory name is not the extension
+    meld_alt_cockpit_tail("a.b/CKPT80R.PIX", out, sizeof(out));
+    TEST_ASSERT_EQUAL_STRING("a.b/CKPT80R_S.PIX", out);
+
+    // no extension, or no room: empty output, so the caller falls back to the
+    // normal per-game-dir search rather than opening something arbitrary
+    meld_alt_cockpit_tail("CKPT80F", out, sizeof(out));
+    TEST_ASSERT_EQUAL_STRING("", out);
+    meld_alt_cockpit_tail("DATA/CKPT80F.PIX", out, 8);
+    TEST_ASSERT_EQUAL_STRING("", out);
+}
+
 void test_meld_suite(void) {
     UnitySetTestFile(__FILE__);
     RUN_TEST(test_meld_identity_line_preserved);
@@ -394,4 +425,5 @@ void test_meld_suite(void) {
     RUN_TEST(test_meld_both_starting_cars_no_duplicate_of_base);
     RUN_TEST(test_meld_both_starting_cars_no_duplicate_among_extras);
     RUN_TEST(test_meld_both_starting_cars_distinct_slot_added);
+    RUN_TEST(test_meld_alt_cockpit_tail);
 }
