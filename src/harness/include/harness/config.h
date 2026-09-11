@@ -79,7 +79,9 @@ typedef struct tHarness_game_config {
     int stealworthy_percentage;
     int stealworthy_rank_limit_disable;
 
-    int num_skids;
+    // Keep every skid, blood and oil mark for the whole race, by baking them
+    // into shared models instead of giving each one its own actor.
+    int persistent_skids;
     int extend_draw_distance;
     int round_wheels;
 

@@ -4,6 +4,10 @@
 #include "dr_types.h"
 
 extern tSkid* gSkids;
+
+// Added by dethrace
+extern int gSkids_drawn;
+extern int gSkid_batches_live;
 extern char* gBoring_material_names[2];
 extern char* gMaterial_names[2];
 
