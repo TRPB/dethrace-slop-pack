@@ -45,6 +45,7 @@ target_sources(harness PRIVATE
     include/harness/config.h
     include/harness/os.h
     include/harness/audio.h
+    include/harness/cockpit.h
     include/harness/meld.h
     include/harness/iso.h
     include/harness/gog.h
@@ -58,6 +59,7 @@ target_sources(harness PRIVATE
     gog.c
     cue.c
     meld_internal.h
+    cockpit.c
     meld.c
     meld_netraces.c
 

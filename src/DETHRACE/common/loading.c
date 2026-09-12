@@ -23,6 +23,7 @@
 #include "grafdata.h"
 #include "graphics.h"
 #include "harness/config.h"
+#include "harness/cockpit.h"
 #include "harness/hooks.h"
 #include "harness/meld.h"
 #include "harness/trace.h"
@@ -1870,6 +1871,13 @@ void SetModelFlags(br_model* pModel, int pOwner) {
 // IDA: void __usercall LoadCar(char *pCar_name@<EAX>, tDriver pDriver@<EDX>, tCar_spec *pCar_spec@<EBX>, int pOwner@<ECX>, char *pDriver_name, tBrender_storage *pStorage_space)
 // FUNCTION: CARM95 0x00420144
 void LoadCar(char* pCar_name, tDriver pDriver, tCar_spec* pCar_spec, int pOwner, char* pDriver_name, tBrender_storage* pStorage_space) {
+#ifdef DETHRACE_FIX_BUGS
+    // Added by dethrace
+    // Forward cockpit image name, for the DATA/COCKPIT.TXT lookup below.
+    // Empty unless this car actually loaded cockpit art, so a car that did not
+    // cannot match an entry.
+    char cockpit_forward_name[32] = "";
+#endif
     FILE* f;
     FILE* g;
     FILE* h;
@@ -1992,6 +2000,15 @@ void LoadCar(char* pCar_name, tDriver pDriver, tCar_spec* pCar_spec, int pOwner,
         for (j = 0; j < COUNT_OF(pCar_spec->cockpit_images); j++) {
             GetALineAndDontArgue(h, s);
             str = strtok(s, "\t ,/");
+#ifdef DETHRACE_FIX_BUGS
+            // Remember the forward cockpit: the mirror rect read further down
+            // is declared per car, but for widened art it belongs to the
+            // cockpit image, which cars share. See harness/cockpit.h.
+            if (j == 0 && str != NULL) {
+                strncpy(cockpit_forward_name, str, sizeof(cockpit_forward_name) - 1);
+                cockpit_forward_name[sizeof(cockpit_forward_name) - 1] = '\0';
+            }
+#endif
             if (!gAusterity_mode) {
 #ifdef DETHRACE_FIX_BUGS
                 the_image = NULL;
@@ -2130,6 +2147,23 @@ void LoadCar(char* pCar_name, tDriver pDriver, tCar_spec* pCar_spec, int pOwner,
         sscanf(str, "%d", &pCar_spec->mirror_right);
         str = strtok(NULL, "\t ,/");
         sscanf(str, "%d", &pCar_spec->mirror_bottom);
+#ifdef DETHRACE_FIX_BUGS
+        // A widened cockpit may have had its mirror continued past the edge
+        // the 4:3 frame cut it off at, so the painted glass is wider than this
+        // car TXT declares and the 3D render would cover only part of it. How
+        // much wider is a property of the generated image, not of the car, so
+        // it is declared once per cockpit in DATA/COCKPIT.TXT. Absent file or
+        // absent entry changes nothing.
+        {
+            int ml, mt, mr, mb;
+            if (Cockpit_MirrorRect(gApplication_path, cockpit_forward_name, &ml, &mt, &mr, &mb)) {
+                pCar_spec->mirror_left = ml;
+                pCar_spec->mirror_top = mt;
+                pCar_spec->mirror_right = mr;
+                pCar_spec->mirror_bottom = mb;
+            }
+        }
+#endif
         GetALineAndDontArgue(h, s);
         str = strtok(s, "\t ,/");
         sscanf(str, "%d", &pCar_spec->prat_left);
