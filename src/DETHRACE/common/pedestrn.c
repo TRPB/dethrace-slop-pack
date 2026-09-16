@@ -2089,6 +2089,8 @@ void CheckPedestrianDeathScenario(tPedestrian_data* pPedestrian) {
                                         billiards_shot ? (void*)incident_actor : NULL,
                                         is_footballer,
                                         proximity_rayed);
+                                } else {
+                                    Achievement_OnRivalPedKilled();
                                 }
                             }
 #endif

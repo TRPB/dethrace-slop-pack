@@ -20,7 +20,13 @@ typedef struct tGame_stats {
     tU32 max_peds_single_race;
     tU32 total_repair_spent;
     tU32 total_credits_earned;
-    tU32 _reserved[5];
+    // High-water marks for the single-race achievements. Carved out of
+    // _reserved, so the struct keeps its size and old saves still load and
+    // checksum — the reserved words were already zero, which is the right
+    // starting value for a maximum.
+    tU32 max_cows_single_race;
+    tU32 max_credits_single_race;
+    tU32 _reserved[3];
     tU32 checksum; // must be last
 } tGame_stats;
 
@@ -34,6 +40,8 @@ void Stats_OnRaceResult(tRace_over_reason reason);
 void Stats_OnOpponentWasted(void);
 void Stats_OnRepairSpent(tU32 amount);
 void Stats_OnCreditsEarned(tU32 amount);
+void Stats_OnCowKilled(tU32 race_cow_kills);
+void Stats_OnRaceCreditsEarned(tU32 race_credits);
 
 #endif // DETHRACE_FIX_BUGS
 

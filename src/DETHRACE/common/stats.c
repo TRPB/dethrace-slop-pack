@@ -109,4 +109,19 @@ void Stats_OnCreditsEarned(tU32 amount) {
     gGame_stats.total_credits_earned += amount;
 }
 
+// Added by dethrace — high-water marks for the single-race achievements. The
+// per-race counts live in achievements.c, which pushes them in here, so both
+// the bar and the unlock measure the same thing.
+void Stats_OnCowKilled(tU32 race_cow_kills) {
+    if (race_cow_kills > gGame_stats.max_cows_single_race) {
+        gGame_stats.max_cows_single_race = race_cow_kills;
+    }
+}
+
+void Stats_OnRaceCreditsEarned(tU32 race_credits) {
+    if (race_credits > gGame_stats.max_credits_single_race) {
+        gGame_stats.max_credits_single_race = race_credits;
+    }
+}
+
 #endif // DETHRACE_FIX_BUGS

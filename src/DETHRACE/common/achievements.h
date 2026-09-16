@@ -79,6 +79,7 @@ int AchCountUnlocked(void);
 void Achievements_Load(int slot);
 void Achievements_Save(int slot);
 void Achievement_OnPedKilled(int is_footballer);
+void Achievement_OnRivalPedKilled(void);
 void Achievement_OnOpponentWasted(const char* pOpponent_name, int opponent_idx);
 void Achievement_OnRaceResult(tRace_over_reason reason);
 void Achievement_OnRaceStart(void);

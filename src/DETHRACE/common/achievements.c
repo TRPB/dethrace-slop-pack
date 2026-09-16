@@ -876,6 +876,47 @@ int AchCountUnlocked(void) {
     return count;
 }
 
+// Added by dethrace — width of the "Unlocked n/N" background box. Sized for the
+// widest tally it can ever show rather than the current one, so the box stays
+// put instead of growing as the count gains digits (0/86 and 22/86 must sit on
+// the same background). The font is proportional, so the widest digit is found
+// by measuring rather than assumed.
+static int AchUnlockedBoxWidth(void) {
+    char digit[2];
+    char count_str[8];
+    char widest_str[32];
+    char widest_digit;
+    int widest_digit_w;
+    int digits;
+    int w;
+    int i;
+    int n;
+
+    widest_digit = '0';
+    widest_digit_w = 0;
+    digit[1] = '\0';
+    for (i = 0; i < 10; i++) {
+        digit[0] = (char)('0' + i);
+        w = BrPixelmapTextWidth(gBack_screen, gFont_7, digit);
+        if (w > widest_digit_w) {
+            widest_digit_w = w;
+            widest_digit = digit[0];
+        }
+    }
+
+    digits = 1;
+    for (n = ACHIEVEMENT_COUNT; n >= 10; n /= 10) {
+        digits++;
+    }
+    for (i = 0; i < digits; i++) {
+        count_str[i] = widest_digit;
+    }
+    count_str[digits] = '\0';
+
+    sprintf(widest_str, "Unlocked %s/%d", count_str, ACHIEVEMENT_COUNT);
+    return BrPixelmapTextWidth(gBack_screen, gFont_7, widest_str) + 26;
+}
+
 // Draw stats summary page into the achievement panel (gCurrent_achievement_index == -1).
 static void DrawStatsPage(void) {
     int panel_left = gCurrent_graf_data->change_car_panel_left;
@@ -1003,7 +1044,7 @@ static void DrawStatsPage(void) {
         unlocked_w = BrPixelmapTextWidth(gBack_screen, gFont_7, unlocked_str);
         text_centre_x = (125 + 221) / 2;
         unlocked_box_h = gFont_7->glyph_y + 8;
-        unlocked_box_w = unlocked_w + 26;
+        unlocked_box_w = AchUnlockedBoxWidth();
         unlocked_box_x = text_centre_x - unlocked_box_w / 2;
         unlocked_box_y = gCurrent_graf_data->change_car_text_y + 20;
         BrPixelmapRectangleFill(gBack_screen, unlocked_box_x, unlocked_box_y, unlocked_box_w, unlocked_box_h, 0);
@@ -1019,19 +1060,24 @@ static void DrawStatsPage(void) {
 // Added by dethrace — returns 1 and fills out_current/out_max for stats-tracked achievements.
 // Only covers achievements with thresholds > 1 where progress is meaningful.
 static int AchGetProgress(int idx, tU32* out_current, tU32* out_max) {
+    // Keyed by ACHIEVEMENT_* rather than bare integers: these used to be raw
+    // indices and silently went one out of step when an achievement was added
+    // above them, hanging progress bars off one-shot achievements.
     switch (idx) {
-    case 1:  *out_current = gGame_stats.total_races_won;       *out_max = 10;      return 1; // Winner Winner Chicken Killer
-    case 4:  *out_current = gGame_stats.total_peds_killed;     *out_max = 100;     return 1; // Massacre
-    case 5:  *out_current = gGame_stats.total_peds_killed;     *out_max = 1000;    return 1; // I'm Coming to Get You
-    case 19: *out_current = gGame_stats.max_peds_single_race;  *out_max = 100;     return 1; // Going Postal
-    case 20: *out_current = gGame_stats.max_peds_single_race;  *out_max = 500;     return 1; // Hunter
-    case 21: *out_current = gGame_stats.total_peds_killed;     *out_max = 5000;    return 1; // Public Health Crisis
-    case 22: *out_current = gGame_stats.total_peds_killed;     *out_max = 10000;   return 1; // Extinction Event
-    case 26: *out_current = gGame_stats.races_won_by_peds;       *out_max = 10;     return 1; // Grim Reaper
-    case 32: *out_current = gGame_stats.total_opponents_wasted; *out_max = 100;    return 1; // Scrap Dealer
-    case 33: *out_current = gGame_stats.races_won_by_opponents; *out_max = 10;    return 1; // Serial Killer
-    case 42: *out_current = gGame_stats.total_repair_spent;    *out_max = 1000000; return 1; // Insurance Nightmare
-    case 45: *out_current = gGame_stats.total_credits_earned;  *out_max = 1000000; return 1; // Millionaire
+    case ACHIEVEMENT_WINNER_WINNER:        *out_current = gGame_stats.total_races_won;        *out_max = 10;      return 1;
+    case ACHIEVEMENT_MASSACRE:             *out_current = gGame_stats.total_peds_killed;      *out_max = 100;     return 1;
+    case ACHIEVEMENT_IM_COMING_TO_GET_YOU: *out_current = gGame_stats.total_peds_killed;      *out_max = 1000;    return 1;
+    case ACHIEVEMENT_GOING_POSTAL:         *out_current = gGame_stats.max_peds_single_race;   *out_max = 100;     return 1;
+    case ACHIEVEMENT_HUNTER:               *out_current = gGame_stats.max_peds_single_race;   *out_max = 500;     return 1;
+    case ACHIEVEMENT_WHOLE_HERD:           *out_current = gGame_stats.max_cows_single_race;   *out_max = 30;      return 1;
+    case ACHIEVEMENT_PUBLIC_HEALTH_CRISIS: *out_current = gGame_stats.total_peds_killed;      *out_max = 5000;    return 1;
+    case ACHIEVEMENT_EXTINCTION_EVENT:     *out_current = gGame_stats.total_peds_killed;      *out_max = 10000;   return 1;
+    case ACHIEVEMENT_GRIM_REAPER:          *out_current = gGame_stats.races_won_by_peds;      *out_max = 10;      return 1;
+    case ACHIEVEMENT_SCRAP_DEALER:         *out_current = gGame_stats.total_opponents_wasted; *out_max = 100;     return 1;
+    case ACHIEVEMENT_SERIAL_KILLER:        *out_current = gGame_stats.races_won_by_opponents; *out_max = 10;      return 1;
+    case ACHIEVEMENT_INSURANCE_NIGHTMARE:  *out_current = gGame_stats.total_repair_spent;     *out_max = 1000000; return 1;
+    case ACHIEVEMENT_CREDIT_WHERE_ITS_DUE: *out_current = gGame_stats.max_credits_single_race; *out_max = 100000; return 1;
+    case ACHIEVEMENT_MILLIONAIRE:          *out_current = gGame_stats.total_credits_earned;   *out_max = 1000000; return 1;
     default: return 0;
     }
 }
@@ -1238,7 +1284,7 @@ static void DrawAchievement(int pCurrent_choice, int pCurrent_mode) {
     // Horizontal centre of the gap between the two buttons (x=125 to x=221 in 320x200)
     text_centre_x = (125 + 221) / 2;
     unlocked_box_h = gFont_7->glyph_y + 8;
-    unlocked_box_w = unlocked_w + 26;
+    unlocked_box_w = AchUnlockedBoxWidth();
     unlocked_box_x = text_centre_x - unlocked_box_w / 2;
     unlocked_box_y = gCurrent_graf_data->change_car_text_y + 20;
     BrPixelmapRectangleFill(gBack_screen, unlocked_box_x, unlocked_box_y, unlocked_box_w, unlocked_box_h, 0);
@@ -1350,7 +1396,23 @@ void Achievement_OnOpponentWasted(const char* pOpponent_name, int opponent_idx) 
     }
 }
 
-// Added by dethrace — called after Stats_OnPedKilled
+// Added by dethrace — a pedestrian was run over by someone other than the local
+// player. Called at the moment of impact rather than when the death finishes.
+//
+// Achievement_OnPedKilled below runs from KillPedestrian, which only finalises a
+// death after its animation has played out - a frame or more after the car hit
+// it. The player's own Patient Zero check runs at impact, so an opponent's kill
+// that was still mid-animation had not blocked yet, and the player could take
+// the fifth pedestrian of the race and still be told they were first.
+void Achievement_OnRivalPedKilled(void) {
+    if (gAch_race_player_peds_killed == 0) {
+        gAch_patient_zero_blocked = 1;
+    }
+}
+
+// Added by dethrace — called after Stats_OnPedKilled. Still blocks Patient Zero
+// as a backstop for deaths that never go through a car impact at all (drowning,
+// falling out of the world).
 void Achievement_OnPedKilled(int is_footballer) {
     if (gAch_race_player_peds_killed == 0) {
         gAch_patient_zero_blocked = 1;
@@ -1421,8 +1483,12 @@ void Achievement_OnRaceResult(tRace_over_reason reason) {
         AchUnlock(ACHIEVEMENT_TOTAL_WIPEOUT);
     }
     // Credit Where It's Due: earned 100k credits in this race
-    if (gGame_stats.total_credits_earned - gAch_credits_race_start >= 100000) {
-        AchUnlock(ACHIEVEMENT_CREDIT_WHERE_ITS_DUE);
+    {
+        tU32 race_credits = gGame_stats.total_credits_earned - gAch_credits_race_start;
+        Stats_OnRaceCreditsEarned(race_credits);
+        if (race_credits >= 100000) {
+            AchUnlock(ACHIEVEMENT_CREDIT_WHERE_ITS_DUE);
+        }
     }
     // My Car Now: won a race in a stolen opponent's car (car_number 100/101 = starting cars)
     if (race_won) {
@@ -1531,6 +1597,7 @@ void Achievement_OnPlayerPedKilled(float speed_mph, int is_cow, int is_billiards
     if (is_cow) {
         AchUnlock(ACHIEVEMENT_BOVINE_INTERVENTION);
         gAch_race_cow_kills++;
+        Stats_OnCowKilled((tU32)gAch_race_cow_kills);
         if (gAch_race_cow_kills >= 30) AchUnlock(ACHIEVEMENT_WHOLE_HERD);
     }
 
