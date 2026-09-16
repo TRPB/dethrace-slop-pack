@@ -93,6 +93,11 @@ extern br_scalar gYon_squared;
 
 int WsScreenOffsetX(void);
 
+#ifdef DETHRACE_FIX_BUGS
+// Added by dethrace
+int CockpitDestX(void);
+#endif
+
 void TurnOnPaletteConversion(void);
 
 void TurnOffPaletteConversion(void);

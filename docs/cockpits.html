@@ -1,0 +1,104 @@
+<meta charset="utf-8"><title>Cockpit comparison</title>
+<style>
+ :root { color-scheme: dark; }
+ body { margin:0; background:#101010; color:#ddd;
+        font:14px/1.6 system-ui,-apple-system,sans-serif; }
+ header { position:sticky; top:0; z-index:9; background:#181818;
+          border-bottom:1px solid #2e2e2e; padding:12px 18px;
+          display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+ h1 { font-size:15px; margin:0; font-weight:600; letter-spacing:.02em; }
+ .note { color:#8a8a8a; font-size:13px; }
+ button { background:#262626; color:#eee; border:1px solid #444;
+          border-radius:5px; padding:6px 13px; cursor:pointer; font:inherit; }
+ button:hover { background:#333; }
+ button.on { background:#2f5d8a; border-color:#3d79b0; }
+ #asp { font-size:17px; font-weight:650; padding:13px 26px; border-radius:7px;
+        letter-spacing:.02em; background:#2f5d8a; border:1px solid #4a86c0;
+        box-shadow:0 2px 0 #1d3a57; }
+ #asp:hover { background:#376ca0; }
+ #asp.on { background:#8a5a2f; border-color:#c08b4a; box-shadow:0 2px 0 #573a1d; }
+ #asp small { display:block; font-size:11px; font-weight:400; opacity:.8;
+              letter-spacing:0; }
+ section { padding:20px 18px; border-bottom:1px solid #202020; }
+ h2 { font-size:15px; margin:0 0 4px; }
+ h2 span { color:#7d7d7d; font-weight:400; }
+ .grp { margin:14px 0 0; }
+ .lbl { font-size:12px; text-transform:uppercase; letter-spacing:.08em;
+        color:#8f8f8f; margin-bottom:5px; }
+ .row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+ .cell { background:#000; border:1px solid #262626; border-radius:3px;
+         overflow:hidden; position:relative; }
+ .cell .v { font-size:11px; color:#777; position:absolute; left:4px; top:2px;
+            z-index:2; text-shadow:0 0 3px #000; }
+ .win { overflow:hidden; }
+ .win img { display:block; width:100%; height:auto; image-rendering:pixelated; }
+ /* 16:9 shows only 856 of the 1180 columns, so crop rather than rescale -- the
+    file is identical either way. WHICH 856 depends on the view, because
+    CockpitDestX() anchors a side view against the edge its original 4:3 art
+    occupies instead of centring it: at phys_width 856 a left view is drawn at
+    856-1180+32 = -292 and a right view at -32, where a forward view is centred
+    at -162. --off carries that per cell. */
+ body.c169 .win img { width:calc(100% * 1180 / 856);
+                      margin-left:calc(-100% * var(--off, 162) / 856); }
+ .missing { aspect-ratio:1180/528; display:flex; align-items:center;
+            justify-content:center; color:#555; font-size:12px; }
+ .intro { max-width:76ch; margin:0 auto; padding:26px 18px 8px; color:#c3c3c3; }
+ .intro p { margin:0 0 12px; }
+</style>
+<div class="intro">
+<p>This pack includes AI generated cockpits for the cars that are stealable. The
+MELD pack includes them but does so by stitching together the different angles,
+this causes some odd effects where the front is a stitched Left, Front and Right
+image. It's fine but it's not great.</p>
+<p>This is a different approach: Use AI to extend the view. Is it as good as hand
+drawn alternatives? No, but in 30 years we don't have them so it's probably the
+best we'll get.</p>
+</div>
+<header>
+  <h1>Cockpit comparison</h1>
+  <button id="asp">Showing 21:9 — click for 16:9<small>what most people
+    actually play on</small></button>
+  <span class="note" id="aspnote">A 16:9 screen loads the same file and simply
+    sees less of it. The toggle crops, it never rescales.</span>
+</header>
+<div id="body"></div>
+<script>
+const DATA = {"order": ["1", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89", "8A", "8F", "90", "91", "92", "93", "94", "95", "101", "99R", "80_S"], "cars": {"80": "Eagle", "81": "Annie", "82": "Screwie", "83": "Buster", "84": "APC", "85": "Otis", "86": "Pitbull", "87": "Vlad", "88": "Tassle", "89": "Ivan", "8A": "Dump", "8F": "Eagle Mk2", "90": "Semi", "91": "Doozer", "92": "Monster", "93": "Pork", "94": "Muscle", "95": "Annie Mk2", "99R": "Robin", "101": "ED-101", "1": "low-res (320x200)"}, "sets": {"orig": {"80": {"F": "orig-80F.png", "L": "orig-80L.png", "R": "orig-80R.png"}, "81": {"F": "orig-81F.png", "L": "orig-81L.png", "R": "orig-81R.png"}, "82": {"F": "orig-82F.png", "L": "orig-82L.png", "R": "orig-82R.png"}, "83": {"F": "orig-83F.png", "L": "orig-83L.png", "R": "orig-83R.png"}, "84": {"F": "orig-84F.png", "L": "orig-84L.png", "R": "orig-84R.png"}, "85": {"F": "orig-85F.png", "L": "orig-85L.png", "R": "orig-85R.png"}, "86": {"F": "orig-86F.png", "L": "orig-86L.png", "R": "orig-86R.png"}, "87": {"F": "orig-87F.png", "L": "orig-87L.png", "R": "orig-87R.png"}, "88": {"F": "orig-88F.png", "L": "orig-88L.png", "R": "orig-88R.png"}, "89": {"F": "orig-89F.png", "L": "orig-89L.png", "R": "orig-89R.png"}, "8A": {"F": "orig-8AF.png", "L": "orig-8AL.png", "R": "orig-8AR.png"}, "80_S": {"F": "orig_s-80F.png", "L": "orig_s-80L.png", "R": "orig_s-80R.png"}, "1": {"F": "orig_s-1F.png", "L": "orig_s-1L.png", "R": "orig_s-1R.png"}, "90": {"F": "orig_s-90F.png", "L": "orig_s-90L.png", "R": "orig_s-90R.png"}, "91": {"F": "orig_s-91F.png", "L": "orig_s-91L.png", "R": "orig_s-91R.png"}, "92": {"F": "orig_s-92F.png", "L": "orig_s-92L.png", "R": "orig_s-92R.png"}, "93": {"F": "orig_s-93F.png", "L": "orig_s-93L.png", "R": "orig_s-93R.png"}, "94": {"F": "orig_s-94F.png", "L": "orig_s-94L.png", "R": "orig_s-94R.png"}, "95": {"F": "orig_s-95F.png", "L": "orig_s-95L.png", "R": "orig_s-95R.png"}}, "ship": {"80": {"F": "ship-80F.png", "L": "ship-80L.png", "R": "ship-80R.png"}, "80_S": {"F": "ship-80_SF.png", "L": "ship-80_SL.png", "R": "ship-80_SR.png"}, "81": {"F": "ship-81F.png", "L": "ship-81L.png", "R": "ship-81R.png"}, "82": {"F": "ship-82F.png", "L": "ship-82L.png", "R": "ship-82R.png"}, "83": {"F": "ship-83F.png", "L": "ship-83L.png", "R": "ship-83R.png"}, "84": {"F": "ship-84F.png", "L": "ship-84L.png", "R": "ship-84R.png"}, "85": {"F": "ship-85F.png", "L": "ship-85L.png", "R": "ship-85R.png"}, "86": {"F": "ship-86F.png", "L": "ship-86L.png", "R": "ship-86R.png"}, "87": {"F": "ship-87F.png", "L": "ship-87L.png", "R": "ship-87R.png"}, "88": {"F": "ship-88F.png", "L": "ship-88L.png", "R": "ship-88R.png"}, "89": {"F": "ship-89F.png", "L": "ship-89L.png", "R": "ship-89R.png"}, "8A": {"F": "ship-8AF.png", "L": "ship-8AL.png", "R": "ship-8AR.png"}, "90": {"F": "ship-90F.png", "L": "ship-90L.png", "R": "ship-90R.png"}, "91": {"F": "ship-91F.png", "L": "ship-91L.png", "R": "ship-91R.png"}, "92": {"F": "ship-92F.png", "L": "ship-92L.png", "R": "ship-92R.png"}, "93": {"F": "ship-93F.png", "L": "ship-93L.png", "R": "ship-93R.png"}, "94": {"F": "ship-94F.png", "L": "ship-94L.png", "R": "ship-94R.png"}, "95": {"F": "ship-95F.png", "L": "ship-95L.png", "R": "ship-95R.png"}}, "meld": {"80": {"F": "meld-80F.png", "L": "meld-80L.png", "R": "meld-80R.png"}, "101": {"F": "meld-101F.png", "L": "meld-101L.png", "R": "meld-101R.png"}, "81": {"F": "meld-81F.png", "L": "meld-81L.png", "R": "meld-81R.png"}, "82": {"F": "meld-82F.png", "L": "meld-82L.png", "R": "meld-82R.png"}, "83": {"F": "meld-83F.png", "L": "meld-83L.png", "R": "meld-83R.png"}, "84": {"F": "meld-84F.png", "L": "meld-84L.png", "R": "meld-84R.png"}, "85": {"F": "meld-85F.png", "L": "meld-85L.png", "R": "meld-85R.png"}, "86": {"F": "meld-86F.png", "L": "meld-86L.png", "R": "meld-86R.png"}, "87": {"F": "meld-87F.png", "L": "meld-87L.png", "R": "meld-87R.png"}, "88": {"F": "meld-88F.png", "L": "meld-88L.png", "R": "meld-88R.png"}, "89": {"F": "meld-89F.png", "L": "meld-89L.png", "R": "meld-89R.png"}, "8A": {"F": "meld-8AF.png", "L": "meld-8AL.png", "R": "meld-8AR.png"}, "8F": {"F": "meld-8FF.png", "L": "meld-8FL.png", "R": "meld-8FR.png"}, "90": {"F": "meld-90F.png", "L": "meld-90L.png", "R": "meld-90R.png"}, "91": {"F": "meld-91F.png", "L": "meld-91L.png", "R": "meld-91R.png"}, "92": {"F": "meld-92F.png", "L": "meld-92L.png", "R": "meld-92R.png"}, "93": {"F": "meld-93F.png", "L": "meld-93L.png", "R": "meld-93R.png"}, "94": {"F": "meld-94F.png", "L": "meld-94L.png", "R": "meld-94R.png"}, "95": {"F": "meld-95F.png", "L": "meld-95L.png", "R": "meld-95R.png"}, "99R": {"F": "meld-99RF.png", "L": "meld-99RL.png", "R": "meld-99RR.png"}}}};
+const GROUPS = [['orig','Original 4:3 (pillarboxed)'],
+                ['ship','Shipping — this fork'],
+                ['meld','MELD pack']];
+// Which 856 columns a 16:9 screen shows. Only OUR set is anchored -- the
+// originals are pillarboxed and the MELD pack is centred, so both of those
+// crop from the middle like any ordinary image.
+const OFF = { L: 292, F: 162, R: 32 };
+const offsetFor = (group, view) => group === 'ship' ? (OFF[view] ?? 162) : 162;
+
+const cell = (n, v, g) => n
+  ? `<div class="cell" style="--off:${offsetFor(g, v)}"><span class="v">${v}</span><div class="win"><img loading="lazy" src="cockpits/${n}" alt="${v}"></div></div>`
+  : `<div class="cell"><span class="v">${v}</span><div class="missing">not present</div></div>`;
+document.getElementById('body').innerHTML = DATA.order.map(cid => {
+  const car = DATA.cars[cid] || '';
+  const groups = GROUPS.map(([g, label]) => {
+    const set = (DATA.sets[g] || {})[cid];
+    if (!set) return '';
+    return `<div class="grp"><div class="lbl">${label}</div><div class="row">`
+      + ['L','F','R'].map(v => cell(set[v], v, g)).join('') + '</div></div>';
+  }).join('');
+  return `<section><h2>CKPT${cid} <span>${car}</span></h2>${groups}</section>`;
+}).join('');
+const b = document.getElementById('asp');
+b.onclick = () => {
+  document.body.classList.toggle('c169');
+  const is169 = document.body.classList.contains('c169');
+  b.innerHTML = is169
+    ? 'Showing 16:9 — click for 21:9<small>what most people actually play on</small>'
+    : 'Showing 21:9 — click for 16:9<small>what most people actually play on</small>';
+  b.classList.toggle('on', is169);
+  document.getElementById('aspnote').textContent = is169
+    ? 'Ours is anchored, so a side view crops from its own edge (L from 292, '
+      + 'R from 32) and keeps all of the original 4:3 art. The other two rows '
+      + 'are centred, so they crop from the middle.'
+    : 'A 16:9 screen loads the same file and simply sees less of it. '
+      + 'The toggle crops, it never rescales.';
+};
+</script>

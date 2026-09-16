@@ -1,0 +1,15 @@
+// Cockpit overrides for the widened art in this pack.
+//
+// The rear-view mirror rect normally comes from each car's
+// DATA/64X48X8/CARS/<CAR>.TXT. Where the widened art continued a mirror
+// past the edge the 4:3 frame cut it off at, the painted glass is wider
+// than that rect and the 3D render would cover only part of it. The rect
+// belongs to the cockpit image rather than the car -- nineteen cars share
+// CKPT80 -- so it is declared once here and applied to whichever car loads
+// that image.
+//
+// A cockpit with no entry keeps its car TXT rect, as does every cockpit if
+// this file is absent. Left, top, right, bottom, same coordinates as the
+// car TXT mirror line.
+
+CKPT80F.PIX   526,72,792,149		// was 524,72,700,149; +90px wider

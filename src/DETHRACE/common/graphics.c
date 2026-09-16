@@ -439,6 +439,45 @@ int WsScreenOffsetX(void) {
     return (gGraf_specs[gGraf_spec_index].phys_width - gGraf_specs[gGraf_spec_index].total_width) / 2;
 }
 
+#ifdef DETHRACE_FIX_BUGS
+// Added by dethrace
+//
+// Where to draw the cockpit image horizontally.
+//
+// A widened cockpit is not symmetric. Only the forward view has new art on both
+// sides; a side view is painted with the original 4:3 artwork flush against one
+// edge and the invented rear of the cabin extending away from it -- looking
+// left the original sits hard right, looking right it sits hard left. That is
+// because the other direction runs forward toward the dashboard, which the
+// forward view already paints, so nothing is invented there.
+//
+// Centring such an image would crop the original artwork at 16:9, which shows
+// only 856 of the 1180 columns. So anchor each side view against the edge its
+// original artwork occupies and leave exactly the reserve the original game
+// left there: cock_margin_x, the impact-reveal space gScreen_wobble_x moves
+// into. The player then sees as much of the original 4:3 artwork at that edge
+// as they always did, at any aspect ratio, and only invented cabin is cropped.
+//
+// cockpit_pixel_width is taken from the forward image and is 0 for a car whose
+// cockpit was never widened, which keeps the original placement.
+int CockpitDestX(void) {
+    int phys_width = gGraf_specs[gGraf_spec_index].phys_width;
+    int cock_width = gProgram_state.current_car.cockpit_pixel_width;
+
+    if (cock_width <= 0) {
+        return -gCurrent_graf_data->cock_margin_x + WsScreenOffsetX();
+    }
+    switch (gProgram_state.cockpit_image_index) {
+    case 1: // left view: original artwork is flush with the image's right edge
+        return phys_width - cock_width + gCurrent_graf_data->cock_margin_x;
+    case 2: // right view: flush left, which is the original game's own formula
+        return -gCurrent_graf_data->cock_margin_x;
+    default: // forward view: new art both sides, so centre it
+        return (phys_width - cock_width) / 2;
+    }
+}
+#endif
+
 // IDA: void __cdecl TurnOnPaletteConversion()
 // FUNCTION: CARM95 0x004b3020
 void TurnOnPaletteConversion(void) {
@@ -2184,12 +2223,7 @@ void RenderAFrame(int pDepth_mask_on) {
         PDUnlockRealBackScreen(1);
         PDLockRealBackScreen(1);
 #ifdef DETHRACE_FIX_BUGS
-        int cock_dest_x;
-        if (gProgram_state.current_car.cockpit_pixel_width > 0) {
-            cock_dest_x = (gGraf_specs[gGraf_spec_index].phys_width - gProgram_state.current_car.cockpit_pixel_width) / 2;
-        } else {
-            cock_dest_x = -gCurrent_graf_data->cock_margin_x + WsScreenOffsetX();
-        }
+        int cock_dest_x = CockpitDestX();
 #else
         int cock_dest_x = -gCurrent_graf_data->cock_margin_x;
 #endif
@@ -2363,12 +2397,7 @@ void RenderAFrame(int pDepth_mask_on) {
 #if !defined(DETHRACE_3DFX_PATCH)
         if (cockpit_on) {
 #ifdef DETHRACE_FIX_BUGS
-            int cock_dest_x;
-            if (gProgram_state.current_car.cockpit_pixel_width > 0) {
-                cock_dest_x = (gGraf_specs[gGraf_spec_index].phys_width - gProgram_state.current_car.cockpit_pixel_width) / 2;
-            } else {
-                cock_dest_x = -gCurrent_graf_data->cock_margin_x + WsScreenOffsetX();
-            }
+            int cock_dest_x = CockpitDestX();
 #else
             int cock_dest_x = -gCurrent_graf_data->cock_margin_x;
 #endif
