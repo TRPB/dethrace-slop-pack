@@ -69,7 +69,11 @@ static void cockpit_parse_line(char* line) {
         return;
     }
 
-    strncpy(s_entries[s_count].name, name, MAX_NAME - 1);
+    /* name was read with "%31s" into a MAX_NAME buffer, so it is always
+     * terminated and always fits. snprintf rather than strncpy because GCC
+     * cannot see that and warns about a truncation that cannot happen; the
+     * explicit terminator covers MSVC's _snprintf, which does not add one. */
+    snprintf(s_entries[s_count].name, sizeof(s_entries[s_count].name), "%s", name);
     s_entries[s_count].name[MAX_NAME - 1] = '\0';
     s_entries[s_count].left = l;
     s_entries[s_count].top = t;
