@@ -166,6 +166,9 @@ int gStop_opponents_moving = 0;
 // motion. Opponent side-pushes cause the collision resolver to wobble c->pos in
 // the lateral direction for a few frames; smoothing forward/lateral deltas
 // separately leaves normal driving unaffected while attenuating the wobble.
+// (The gate in NormalPositionExternalCamera read == 1, so the lateral pass ran
+// on the default setting and was excluded by the =2 that documents it. It now
+// reads >= 2, matching this description: =1 vertical only, =2 adds lateral.)
 // gCamera_smooth_lat_vel is the EMA of the per-frame lateral camera delta.
 // gCamera_prev_car_x/z hold the previous frame's car position for delta.
 // gCamera_smooth_look gates this to the normal follow camera;
@@ -5720,7 +5723,24 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
             // still tracking genuine slope changes closely enough to stay framed.
             br_scalar smooth_rate = time * 15.0f;
             br_scalar lag_rate = time * 2.0f;
-            if (!gCamera_smooth_look_valid || pTime >= 5000) {
+            // Every filter below has the form x = (x + rate * input) / (rate + 1),
+            // which carries its own previous value. That makes each one an
+            // absorbing state for a non-finite value: one NaN or infinity gets in
+            // and no later frame can ever bring it back to a finite number. A
+            // poisoned gCamera_aim_y reaches the camera pitch in PointCameraAtCar,
+            // so gCamera_to_world goes NaN, and from there the whole render path
+            // does -- including hither_z/yon_z in the GL fog shader, which paints
+            // the entire 3D viewport a flat fog colour until the race ends.
+            //
+            // Hence three cases rather than two. A bad physics frame must be
+            // rejected *before* the re-seed branch, because re-seeding copies
+            // c->pos straight into the filters and would simply import the poison.
+            if (!isfinite(c->pos.v[0]) || !isfinite(c->pos.v[1]) || !isfinite(c->pos.v[2])
+                || !isfinite(c->direction.v[1])) {
+                // Hold the last good filter state for this frame.
+            } else if (!gCamera_smooth_look_valid || pTime >= 5000
+                || !isfinite(gCamera_smooth_look_y) || !isfinite(gCamera_smooth_dir_y)
+                || !isfinite(gCamera_smooth_lag_y) || !isfinite(gCamera_smooth_lat_vel)) {
                 gCamera_smooth_look_y = c->pos.v[1];
                 gCamera_smooth_dir_y = c->direction.v[1];
                 gCamera_smooth_lag_y = 0.0f;
@@ -5737,7 +5757,7 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
                 // point sits at the real height without the per-frame wobble.
                 lag = c->pos.v[1] - gCamera_smooth_look_y;
                 gCamera_smooth_lag_y = (gCamera_smooth_lag_y + lag_rate * lag) / (lag_rate + 1.0f);
-                if (harness_game_config.camera_judder_fix == 1) {
+                if (harness_game_config.camera_judder_fix >= 2) {
                     // Smooth only the lateral (perpendicular-to-heading) component
                     // of the per-frame camera delta. Forward motion is left raw so
                     // normal driving introduces no lag; only sideways impulses are
@@ -5751,8 +5771,16 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
                         br_scalar delta_lat = dpx * lx + dpz * lz;
                         gCamera_smooth_lat_vel = (gCamera_smooth_lat_vel + smooth_rate * delta_lat) / (smooth_rate + 1.0f);
                         br_scalar correction = gCamera_smooth_lat_vel - delta_lat;
-                        gCamera->t.t.translate.t.v[0] += correction * lx;
-                        gCamera->t.t.translate.t.v[2] += correction * lz;
+                        // Bounded like the render-matrix nudge in InterpolateCars:
+                        // this cancels a per-frame wobble, so anything larger is an
+                        // impulse or a teleport rather than the thing being
+                        // filtered, and applying it would throw the camera. A range
+                        // test rejects NaN for free -- every comparison against NaN
+                        // is false, so the nudge is simply skipped.
+                        if (correction > -0.5f && correction < 0.5f) {
+                            gCamera->t.t.translate.t.v[0] += correction * lx;
+                            gCamera->t.t.translate.t.v[2] += correction * lz;
+                        }
                     }
                     gCamera_prev_car_x = c->pos.v[0];
                     gCamera_prev_car_z = c->pos.v[2];
@@ -7653,7 +7681,12 @@ int TestForNan(float* f) {
     tU32 i;
 
 #ifdef DETHRACE_FIX_BUGS
-    return isnan(*f);
+    // !isfinite rather than isnan: the original below tests for an all-ones
+    // exponent, which is true for NaN *and* for either infinity. isnan() alone
+    // narrowed that, letting +inf past every caller's guard -- in
+    // CheckCameraHither it was then saved to old_hither and restored forever,
+    // because an infinity is not a NaN. This restores the original semantics.
+    return !isfinite(*f);
 #else
     memcpy(&i, f, sizeof i);
     i = ~i & 0x7F800000;
